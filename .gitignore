@@ -1,0 +1,29 @@
+# 编译产物
+build/
+*.elf
+*.map
+*.o
+*.obj
+*.bin
+*.hex
+*.su
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+.ninja_deps
+.ninja_log
+build.ninja
+
+# CubeMX
+mx.scratch
+
+# VSCode
+.vscode/ipch/
+.vscode/*.log
+
+# 系统文件
+.DS_Store
+Thumbs.db
