@@ -3,15 +3,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef enum
-{
-    TASK_PRIORITY_LOW      = 1,     //低优先级
-    TASK_PRIORITY_MED      = 3,     //中优先级
-    TASK_PRIORITY_HIGH     = 5,     //高优先级
-    TASK_PRIORITY_REALTIME = 18     //实时优先级
-
-} taskPri_t;
-
 typedef struct
 {
     const char *Name;               //任务名

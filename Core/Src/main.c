@@ -14,6 +14,7 @@
 /* USER CODE BEGIN Includes */
 
 #include "Task.h"
+#include "AHRS.h"
 #include <stdio.h>
 #include "DPS310.h"
 #include "SysTime.h"
@@ -35,7 +36,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-#define USER_DEBUG
+#define USER_DEBUG_AHRS
+// #define USER_DEBUG_DEVICE
 
 /* USER CODE END PD */
 
@@ -99,7 +101,19 @@ int main(void)
   {
     Scheduler_Run();
 
-#ifdef USER_DEBUG
+#ifdef USER_DEBUG_AHRS
+    static uint32_t tick = 0;
+    if(millis() - tick >= 100)
+    {
+      tick = millis();
+      printf("Yaw: %6.1f°| Roll: %6.1f°| Pitch: %6.1f° \r\n",
+      AHRS.Yaw  *57.2958f,
+      AHRS.Roll *57.2958f,
+      AHRS.Pitch*57.2958f);
+    }
+#endif
+
+#ifdef USER_DEBUG_DEVICE
     static uint32_t tick = 0;
     if(millis() - tick >= 100)
     {
@@ -111,7 +125,6 @@ int main(void)
       DPS310_Device.Pressure,DPS310_Device.Temperature);
     }
 #endif
-
   }
 }
 /* USER CODE END 0 */
