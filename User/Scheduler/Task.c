@@ -45,6 +45,7 @@ void AHRS_Ctrl(void)
     }
 
     float dt = (Now - Last)*1e-6f;
+    Last = Now;
     if(dt < 0.0008f || dt > 0.0012f) return;        //保护执行周期1ms
 
     float Ax = ICM42605_Device1.Acc[0]/ACC_SCALE;
@@ -60,7 +61,6 @@ void AHRS_Ctrl(void)
     float Mz = (float)IST8310_Device.Mag[2];
 
     AHRS_Update(Ax,Ay,Az,Gx,Gy,Gz,Mx,My,Mz,dt);
-    Last = Now;
 }
 
 /*

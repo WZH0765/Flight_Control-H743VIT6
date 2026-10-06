@@ -36,8 +36,9 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-#define USER_DEBUG_AHRS
+// #define USER_DEBUG_AHRS
 // #define USER_DEBUG_DEVICE
+#define USER_DEBUG_HOST_TOOL
 
 /* USER CODE END PD */
 
@@ -123,6 +124,18 @@ int main(void)
       ICM42605_Device1.Acc[0],ICM42605_Device1.Acc[1],ICM42605_Device1.Acc[2],
       IST8310_Device.Mag[0],IST8310_Device.Mag[1],IST8310_Device.Mag[2],
       DPS310_Device.Pressure,DPS310_Device.Temperature);
+    }
+#endif
+
+#ifdef USER_DEBUG_HOST_TOOL
+    static uint32_t tick = 0;
+    if(millis() - tick >= 100)
+    {
+      tick = millis();
+      printf("%.1f,%.1f,%.1f\n",
+      AHRS.Yaw  *57.2958f,
+      AHRS.Roll *57.2958f,
+      AHRS.Pitch*57.2958f);
     }
 #endif
   }
