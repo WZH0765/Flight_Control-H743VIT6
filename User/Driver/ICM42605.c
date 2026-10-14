@@ -141,7 +141,7 @@ bool ICM42605_AccRead(imu_t *Device)
 /*
 *   读取ICM42605 Gyro
 */
-bool ICM42605_GyroRead(imu_t *Device)
+bool ICM42605_GyrRead(imu_t *Device)
 {
     uint8_t Data[6] = {0};
 
@@ -151,9 +151,9 @@ bool ICM42605_GyroRead(imu_t *Device)
         return false;
     }
 
-    Device->Gyro[0] = (float)INT16_BE(&Data[0]);
-    Device->Gyro[1] = (float)INT16_BE(&Data[2]);
-    Device->Gyro[2] = (float)INT16_BE(&Data[4]);
+    Device->Gyr[0] = (float)INT16_BE(&Data[0]);
+    Device->Gyr[1] = (float)INT16_BE(&Data[2]);
+    Device->Gyr[2] = (float)INT16_BE(&Data[4]);
 
     return true;
 }

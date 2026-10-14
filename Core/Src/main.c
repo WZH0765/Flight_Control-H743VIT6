@@ -3,6 +3,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "Health.h"
 #include "i2c.h"
 #include "sdmmc.h"
 #include "spi.h"
@@ -23,6 +24,7 @@
 #include "QMC5883P.h"
 #include "Hardware.h"
 #include "Scheduler.h"
+#include "usbd_cdc_if.h"
 
 /* USER CODE END Includes */
 
@@ -119,23 +121,46 @@ int main(void)
     if(millis() - tick >= 100)
     {
       tick = millis();
-      printf("GYR: %6.0f %6.0f %6.0f | ACC: %6.0f %6.0f %6.0f | MAG: %5d %5d %5d | BAR: %.1f Pa %.1f C\r\n",
-      ICM42605_Device1.Gyro[0],ICM42605_Device1.Gyro[1],ICM42605_Device1.Gyro[2],
-      ICM42605_Device1.Acc[0],ICM42605_Device1.Acc[1],ICM42605_Device1.Acc[2],
-      IST8310_Device.Mag[0],IST8310_Device.Mag[1],IST8310_Device.Mag[2],
-      DPS310_Device.Pressure,DPS310_Device.Temperature);
+      printf("GYR: %6.0f %6.0f %6.0f | ACC: %6.0f %6.0f %6.0f | MAG: %5d %5d %5d | BAR: %.1f Pa %.1f C | HEALTH: %d %d %d %d\r\n",
+      ICM42605_Device1.Gyr[0],
+      ICM42605_Device1.Gyr[1],
+      ICM42605_Device1.Gyr[2],
+      ICM42605_Device1.Acc[0],
+      ICM42605_Device1.Acc[1],
+      ICM42605_Device1.Acc[2],
+      IST8310_Device.Mag[0],
+      IST8310_Device.Mag[1],
+      IST8310_Device.Mag[2],
+      DPS310_Device.Pressure,
+      DPS310_Device.Temperature,
+      Health_Status(&GYR_Health),
+      Health_Status(&ACC_Health),
+      Health_Status(&MAG_Health),
+      Health_Status(&BAR_Health));
     }
 #endif
 
 #ifdef USER_DEBUG_HOST_TOOL
+    char buffer[128] = {0};
     static uint32_t tick = 0;
     if(millis() - tick >= 100)
     {
       tick = millis();
-      printf("%.1f,%.1f,%.1f\n",
+      int length = snprintf(buffer,sizeof(buffer),"%.1f,%.1f,%.1f,%d,%d,%d,%.1f,%.1f,%d,%d,%d,%d\n",
       AHRS.Yaw  *57.2958f,
       AHRS.Roll *57.2958f,
-      AHRS.Pitch*57.2958f);
+      AHRS.Pitch*57.2958f,
+      IST8310_Device.Mag[0],
+      IST8310_Device.Mag[1],
+      IST8310_Device.Mag[2],
+      DPS310_Device.Pressure,
+      DPS310_Device.Temperature,
+      Health_Status(&GYR_Health),
+      Health_Status(&ACC_Health),
+      Health_Status(&MAG_Health),
+      Health_Status(&BAR_Health));
+
+      CDC_Transmit_FS((uint8_t *)buffer,length);
     }
 #endif
   }

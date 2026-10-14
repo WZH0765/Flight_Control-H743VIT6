@@ -28,32 +28,32 @@ void AHRS_Update(float Ax,float Ay,float Az,float Gx,float Gy,float Gz,float Mx,
         Gy += KP_ACC*A_ey;
         Gz += KP_ACC*A_ez;
     }
-    // float Mn = sqrtf(Mx*Mx + My*My + Mz*Mz);
-    // if(Mn > 0.01f)
-    // {
-    //     Mx /= Mn; My /= Mn; Mz /= Mn;
-    //     float hx = 2.0f*(Mx*(0.5f - q2*q2 - q3*q3)+My*(q1*q2 - q0*q3)+Mz*(q1*q3 + q0*q2));
-    //     float hy = 2.0f*(Mx*(q1*q2 + q0*q3)+My*(0.5f - q1*q1 - q3*q3)+Mz*(q2*q3 - q0*q1));
-        
-    //     float bx = sqrtf(hx*hx + hy*hy);
-    //     float bz = 2.0f*(Mx*(q1*q3 - q0*q2)+My*(q2*q3 + q0*q1)+Mz*(0.5f - q1*q1 - q2*q2));
+    float Mn = sqrtf(Mx*Mx + My*My + Mz*Mz);
+    if(Mn > 0.01f)
+    {
+        Mx /= Mn; My /= Mn; Mz /= Mn;
+        float hx = 2.0f*(Mx*(0.5f - q2*q2 - q3*q3)+My*(q1*q2 - q0*q3)+Mz*(q1*q3 + q0*q2));
+        float hy = 2.0f*(Mx*(q1*q2 + q0*q3)+My*(0.5f - q1*q1 - q3*q3)+Mz*(q2*q3 - q0*q1));
 
-    //     float M_vx = 2.0f * (bx*(0.5f - q2*q2 - q3*q3) + bz*(q1*q3 - q0*q2));
-    //     float M_vy = 2.0f * (bx*(q1*q2 - q0*q3) + bz*(q2*q3 + q0*q1));
-    //     float M_vz = 2.0f * (bx*(q1*q3 + q0*q2) + bz*(0.5f - q1*q1 - q2*q2));
+        float bx = sqrtf(hx*hx + hy*hy);
+        float bz = 2.0f*(Mx*(q1*q3 - q0*q2)+My*(q2*q3 + q0*q1)+Mz*(0.5f - q1*q1 - q2*q2));
 
-    //     float M_ex = My*M_vz - Mz*M_vy;
-    //     float M_ey = Mz*M_vx - Mx*M_vz;
-    //     float M_ez = Mx*M_vy - My*M_vx;
+        float M_vx = 2.0f * (bx*(0.5f - q2*q2 - q3*q3) + bz*(q1*q3 - q0*q2));
+        float M_vy = 2.0f * (bx*(q1*q2 - q0*q3) + bz*(q2*q3 + q0*q1));
+        float M_vz = 2.0f * (bx*(q1*q3 + q0*q2) + bz*(0.5f - q1*q1 - q2*q2));
 
-    //     Gx_Bias += KI_MAG*M_ex*dt;
-    //     Gy_Bias += KI_MAG*M_ey*dt;
-    //     Gz_Bias += KI_MAG*M_ez*dt;
+        float M_ex = My*M_vz - Mz*M_vy;
+        float M_ey = Mz*M_vx - Mx*M_vz;
+        float M_ez = Mx*M_vy - My*M_vx;
 
-    //     Gx += KP_MAG*M_ex;
-    //     Gy += KP_MAG*M_ey;
-    //     Gz += KP_MAG*M_ez;
-    // }
+        Gx_Bias += KI_MAG*M_ex*dt;
+        Gy_Bias += KI_MAG*M_ey*dt;
+        Gz_Bias += KI_MAG*M_ez*dt;
+
+        Gx += KP_MAG*M_ex;
+        Gy += KP_MAG*M_ey;
+        Gz += KP_MAG*M_ez;
+    }
 
     Gx += Gx_Bias;
     Gy += Gy_Bias;

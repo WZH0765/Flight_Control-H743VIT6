@@ -1,5 +1,3 @@
-I2C1 两个硬件
-I2C2 一个硬件
 IO:
 ----------------------
 A00: MOTOR3 OUT
@@ -79,4 +77,6 @@ E11: SPI_PREINIT CS
 E12: FREE 
 E13: FREE 
 E14: FREE 
-E15: FREE 	
+E15: FREE 
+
+

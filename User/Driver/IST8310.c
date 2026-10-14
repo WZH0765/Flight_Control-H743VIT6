@@ -1,4 +1,5 @@
 #include "Bus.h"
+#include <stdio.h>
 #include <stdint.h>
 #include "SysTime.h"
 #include <stdbool.h>
@@ -33,6 +34,9 @@ void IST8310_Init(mag_t *Device)
 {
     Bus_SetSpeed(Device->BusDevice,I2C_SPEED_INIT);
 
+    Bus_Write(Device->BusDevice,IST8310_RA_CNTRL2,IST8310_CNTRL2_RESET);
+    HAL_Delay(100);
+
     Bus_Write(Device->BusDevice,IST8310_RA_CNTRL1,IST8310_ODR_50_HZ);
     HAL_Delay(5);
 
@@ -56,7 +60,7 @@ bool IST8310_Read(mag_t *Device)
     }
 
     Device->Mag[0] =  (int16_t)(Data[1]<<8|Data[0])*3;
-    Device->Mag[1] = -(int16_t)(Data[3]<<8|Data[2])*3;
+    Device->Mag[1] =  (int16_t)(Data[3]<<8|Data[2])*3;
     Device->Mag[2] =  (int16_t)(Data[5]<<8|Data[4])*3;
 
     return true;

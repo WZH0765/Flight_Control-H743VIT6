@@ -1,7 +1,14 @@
 #pragma once
 
+#include "Health.h"
+
 #define ACC_SCALE (2048.0f)
 #define GYR_SCALE (16.4f/0.0174533f)
+
+extern health_t ACC_Health;
+extern health_t GYR_Health;
+extern health_t MAG_Health;
+extern health_t BAR_Health;
 
 typedef enum
 {

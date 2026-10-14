@@ -17,6 +17,11 @@ void IST8310_Init(mag_t *Device);
 bool IST8310_Read(mag_t *Device);
 bool IST8310_Detect(mag_t *Device);
 
+/******上位机中采集到的偏移量******/
+#define MAG_OFFSET_X            (94)
+#define MAG_OFFSET_Y            (-28)
+#define MAG_OFFSET_Z            (-219)
+
 /**************** IST8310 RegisterAddress ************************/
 #define IST8310_RA_WHOAMI       0x00
 #define IST8310_RA_DATA         0x03

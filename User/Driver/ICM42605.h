@@ -27,7 +27,7 @@ void ICM42605_Init(imu_t *Device);
 bool ICM42605_Detect(imu_t *Device);
 
 bool ICM42605_AccRead(imu_t *Device);
-bool ICM42605_GyroRead(imu_t *Device);
+bool ICM42605_GyrRead(imu_t *Device);
 bool ICM42605_TempRead(imu_t *Device);
 
 

@@ -4,8 +4,8 @@ typedef struct
 {
     bus_t *BusDevice;
 
-    float Acc [3];
-    float Gyro[3];
+    float Acc[3];
+    float Gyr[3];
 
     int16_t Temp;
 

@@ -54,6 +54,7 @@ file(GLOB USER_SOURCES
     "${CMAKE_SOURCE_DIR}/User/Bus/*.c"
     "${CMAKE_SOURCE_DIR}/User/AHRS/*.c"
     "${CMAKE_SOURCE_DIR}/User/Driver/*.c"
+    "${CMAKE_SOURCE_DIR}/User/Health/*.c"
     "${CMAKE_SOURCE_DIR}/User/Attitude/*.c"
     "${CMAKE_SOURCE_DIR}/User/Scheduler/*.c"
 )
@@ -70,6 +71,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/User/Bus
     ${CMAKE_SOURCE_DIR}/User/AHRS
     ${CMAKE_SOURCE_DIR}/User/Driver
+    ${CMAKE_SOURCE_DIR}/User/Health
     ${CMAKE_SOURCE_DIR}/User/Attitude
     ${CMAKE_SOURCE_DIR}/User/Scheduler
 )
