@@ -6,6 +6,14 @@
 #include "hardware.h"
 #include "stm32h7xx_hal.h"
 
+/******************
+*    硬件物理坐标
+*     Y---▲
+*         |
+*         X
+*      Z轴向下
+******************/
+
 /*
 *   切换ICM42605 Bank
 */
@@ -139,7 +147,7 @@ bool ICM42605_AccRead(imu_t *Device)
 }
 
 /*
-*   读取ICM42605 Gyro
+*   读取ICM42605 Gyr
 */
 bool ICM42605_GyrRead(imu_t *Device)
 {

@@ -40,7 +40,7 @@
 
 // #define USER_DEBUG_AHRS
 // #define USER_DEBUG_DEVICE
-#define USER_DEBUG_HOST_TOOL
+// #define USER_DEBUG_HOST_TOOL
 
 /* USER CODE END PD */
 
@@ -128,9 +128,16 @@ int main(void)
       ICM42605_Device1.Acc[0],
       ICM42605_Device1.Acc[1],
       ICM42605_Device1.Acc[2],
+    #ifdef USE_IST8310
       IST8310_Device.Mag[0],
       IST8310_Device.Mag[1],
       IST8310_Device.Mag[2],
+    #endif
+    #ifdef USE_QMC5883P
+      QMC5883P_Device.Mag[0],
+      QMC5883P_Device.Mag[1],
+      QMC5883P_Device.Mag[2],
+    #endif
       DPS310_Device.Pressure,
       DPS310_Device.Temperature,
       Health_Status(&GYR_Health),
@@ -150,9 +157,16 @@ int main(void)
       AHRS.Yaw  *57.2958f,
       AHRS.Roll *57.2958f,
       AHRS.Pitch*57.2958f,
+    #ifdef USE_IST8310
       IST8310_Device.Mag[0],
       IST8310_Device.Mag[1],
       IST8310_Device.Mag[2],
+    #endif
+    #ifdef USE_QMC5883P
+      QMC5883P_Device.Mag[0],
+      QMC5883P_Device.Mag[1],
+      QMC5883P_Device.Mag[2],
+    #endif
       DPS310_Device.Pressure,
       DPS310_Device.Temperature,
       Health_Status(&GYR_Health),

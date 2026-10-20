@@ -51,7 +51,7 @@ class AttitudeIndicator(QWidget):
         # ============ 刻度（随 Roll 旋转、随 Pitch 平移） ============
         p.save()
         p.translate(cx, cy)
-        p.rotate(-self.roll)
+        p.rotate(self.roll)
 
         # Pitch 满量程 ±45°
         pitch_px = self.pitch * R / 45.0

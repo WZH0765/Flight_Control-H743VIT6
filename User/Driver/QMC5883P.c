@@ -5,6 +5,15 @@
 #include "QMC5883P.h"
 #include "stm32h7xx_hal.h"
 
+/******************
+*    硬件物理坐标
+*         X
+*         |
+*         ▲---Y
+*         
+*      Z轴向下
+******************/
+
 bool QMC5883P_Detect(mag_t *Device)
 {
     uint8_t ID = 0;
@@ -44,7 +53,7 @@ void QMC5883P_Init(mag_t *Device)
                                                                  QMC5883P_CONF1_MODE_CONTINUOUS);
     HAL_Delay(10);
 
-    Bus_SetSpeed(Device->BusDevice,I2C_SPEED_FAST);
+    // Bus_SetSpeed(Device->BusDevice,I2C_SPEED_FAST);
 }
 
 bool QMC5883P_Read(mag_t *Device)
@@ -67,9 +76,9 @@ bool QMC5883P_Read(mag_t *Device)
         return false;
     }
 
-    Device->Mag[0] = -(int16_t)(Data[3]<<8|Data[2]);
-    Device->Mag[1] = -(int16_t)(Data[1]<<8|Data[0]);
-    Device->Mag[2] = -(int16_t)(Data[5]<<8|Data[4]);
+    Device->Mag[0] = (int16_t)(Data[3]<<8|Data[2]);
+    Device->Mag[1] = (int16_t)(Data[1]<<8|Data[0]);
+    Device->Mag[2] = (int16_t)(Data[5]<<8|Data[4]);
 
     return true;
 }

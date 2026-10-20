@@ -53,6 +53,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 file(GLOB USER_SOURCES
     "${CMAKE_SOURCE_DIR}/User/Bus/*.c"
     "${CMAKE_SOURCE_DIR}/User/AHRS/*.c"
+    "${CMAKE_SOURCE_DIR}/User/Calib/*.c"
     "${CMAKE_SOURCE_DIR}/User/Driver/*.c"
     "${CMAKE_SOURCE_DIR}/User/Health/*.c"
     "${CMAKE_SOURCE_DIR}/User/Attitude/*.c"
@@ -70,6 +71,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     ${CMAKE_SOURCE_DIR}/User/Bus
     ${CMAKE_SOURCE_DIR}/User/AHRS
+    ${CMAKE_SOURCE_DIR}/User/Calib
     ${CMAKE_SOURCE_DIR}/User/Driver
     ${CMAKE_SOURCE_DIR}/User/Health
     ${CMAKE_SOURCE_DIR}/User/Attitude

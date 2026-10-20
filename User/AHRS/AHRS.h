@@ -2,9 +2,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define KP_ACC   0.5f
+#define KP_ACC   1.2f
 #define KI_ACC   0.0f
-#define KP_MAG   1.0f
+#define KP_MAG   0.1f
 #define KI_MAG   0.0f
 
 typedef struct

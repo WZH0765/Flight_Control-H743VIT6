@@ -1,6 +1,22 @@
 #include "AHRS.h"
 #include <math.h>
 
+/******************
+*    算法物理坐标-标准NED
+*         X
+*         |
+*         ▲---Y
+*         
+*      Z轴向下
+******************/
+
+/******************
+*   标准NED下
+*   Yaw   - 顺时针正
+*   Roll  - 右滚为正
+*   Pitch - 仰角为正
+******************/
+
 euler_t AHRS = {0};
 
 static float Gx_Bias = 0,Gy_Bias = 0,Gz_Bias = 0;
@@ -12,9 +28,9 @@ void AHRS_Update(float Ax,float Ay,float Az,float Gx,float Gy,float Gz,float Mx,
     if(An > 0.01f)
     {
         Ax /= An; Ay /= An; Az /= An;
-        float A_vx = 2.0f*(q1*q3 - q0*q2);
-        float A_vy = 2.0f*(q0*q1 + q2*q3);
-        float A_vz = q0*q0 - q1*q1 - q2*q2 + q3*q3;
+        float A_vx = -2.0f*(q1*q3 - q0*q2);
+        float A_vy = -2.0f*(q0*q1 + q2*q3);
+        float A_vz = -(q0*q0 - q1*q1 - q2*q2 + q3*q3);
 
         float A_ex = Ay*A_vz - Az*A_vy;
         float A_ey = Az*A_vx - Ax*A_vz;
@@ -38,9 +54,9 @@ void AHRS_Update(float Ax,float Ay,float Az,float Gx,float Gy,float Gz,float Mx,
         float bx = sqrtf(hx*hx + hy*hy);
         float bz = 2.0f*(Mx*(q1*q3 - q0*q2)+My*(q2*q3 + q0*q1)+Mz*(0.5f - q1*q1 - q2*q2));
 
-        float M_vx = 2.0f * (bx*(0.5f - q2*q2 - q3*q3) + bz*(q1*q3 - q0*q2));
-        float M_vy = 2.0f * (bx*(q1*q2 - q0*q3) + bz*(q2*q3 + q0*q1));
-        float M_vz = 2.0f * (bx*(q1*q3 + q0*q2) + bz*(0.5f - q1*q1 - q2*q2));
+        float M_vx = -2.0f * (bx*(0.5f - q2*q2 - q3*q3) + bz*(q1*q3 - q0*q2));
+        float M_vy = -2.0f * (bx*(q1*q2 - q0*q3) + bz*(q2*q3 + q0*q1));
+        float M_vz = -2.0f * (bx*(q1*q3 + q0*q2) + bz*(0.5f - q1*q1 - q2*q2));
 
         float M_ex = My*M_vz - Mz*M_vy;
         float M_ey = Mz*M_vx - Mx*M_vz;
