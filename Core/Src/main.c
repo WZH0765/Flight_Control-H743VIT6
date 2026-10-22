@@ -17,11 +17,7 @@
 #include "Task.h"
 #include "AHRS.h"
 #include <stdio.h>
-#include "DPS310.h"
 #include "SysTime.h"
-#include "IST8310.h"
-#include "ICM42605.h"
-#include "QMC5883P.h"
 #include "Hardware.h"
 #include "Scheduler.h"
 #include "usbd_cdc_if.h"
@@ -121,25 +117,18 @@ int main(void)
     if(millis() - tick >= 100)
     {
       tick = millis();
-      printf("GYR: %6.0f %6.0f %6.0f | ACC: %6.0f %6.0f %6.0f | MAG: %5d %5d %5d | BAR: %.1f Pa %.1f C | HEALTH: %d %d %d %d\r\n",
-      ICM42605_Device1.Gyr[0],
-      ICM42605_Device1.Gyr[1],
-      ICM42605_Device1.Gyr[2],
-      ICM42605_Device1.Acc[0],
-      ICM42605_Device1.Acc[1],
-      ICM42605_Device1.Acc[2],
-    #ifdef USE_IST8310
-      IST8310_Device.Mag[0],
-      IST8310_Device.Mag[1],
-      IST8310_Device.Mag[2],
-    #endif
-    #ifdef USE_QMC5883P
-      QMC5883P_Device.Mag[0],
-      QMC5883P_Device.Mag[1],
-      QMC5883P_Device.Mag[2],
-    #endif
-      DPS310_Device.Pressure,
-      DPS310_Device.Temperature,
+      printf("GYR: %6.3f %6.3f %6.3f | ACC: %6.2f %6.2f %6.2f | MAG: %5.0f %5.0f %5.0f | BAR: %.1f Pa %.1f C | HEALTH: %d %d %d %d\r\n",
+      HW_Sample.Gyr[0],
+      HW_Sample.Gyr[1],
+      HW_Sample.Gyr[2],
+      HW_Sample.Acc[0],
+      HW_Sample.Acc[1],
+      HW_Sample.Acc[2],
+      HW_Sample.Mag[0],
+      HW_Sample.Mag[1],
+      HW_Sample.Mag[2],
+      HW_Sample.Pressure,
+      HW_Sample.Temperature,
       Health_Status(&GYR_Health),
       Health_Status(&ACC_Health),
       Health_Status(&MAG_Health),
@@ -153,22 +142,15 @@ int main(void)
     if(millis() - tick >= 100)
     {
       tick = millis();
-      int length = snprintf(buffer,sizeof(buffer),"%.1f,%.1f,%.1f,%d,%d,%d,%.1f,%.1f,%d,%d,%d,%d\n",
+      int length = snprintf(buffer,sizeof(buffer),"%.1f,%.1f,%.1f,%.0f,%.0f,%.0f,%.1f,%.1f,%d,%d,%d,%d\n",
       AHRS.Yaw  *57.2958f,
       AHRS.Roll *57.2958f,
       AHRS.Pitch*57.2958f,
-    #ifdef USE_IST8310
-      IST8310_Device.Mag[0],
-      IST8310_Device.Mag[1],
-      IST8310_Device.Mag[2],
-    #endif
-    #ifdef USE_QMC5883P
-      QMC5883P_Device.Mag[0],
-      QMC5883P_Device.Mag[1],
-      QMC5883P_Device.Mag[2],
-    #endif
-      DPS310_Device.Pressure,
-      DPS310_Device.Temperature,
+      HW_Sample.Mag[0],
+      HW_Sample.Mag[1],
+      HW_Sample.Mag[2],
+      HW_Sample.Pressure,
+      HW_Sample.Temperature,
       Health_Status(&GYR_Health),
       Health_Status(&ACC_Health),
       Health_Status(&MAG_Health),

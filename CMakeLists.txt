@@ -50,7 +50,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
 )
 
-file(GLOB USER_SOURCES
+file(GLOB USER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/User/Bus/*.c"
     "${CMAKE_SOURCE_DIR}/User/AHRS/*.c"
     "${CMAKE_SOURCE_DIR}/User/Calib/*.c"
@@ -58,6 +58,7 @@ file(GLOB USER_SOURCES
     "${CMAKE_SOURCE_DIR}/User/Health/*.c"
     "${CMAKE_SOURCE_DIR}/User/Attitude/*.c"
     "${CMAKE_SOURCE_DIR}/User/Scheduler/*.c"
+    "${CMAKE_SOURCE_DIR}/User/Protocol/*.c"
 )
 
 # Add sources to executable
@@ -76,6 +77,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/User/Health
     ${CMAKE_SOURCE_DIR}/User/Attitude
     ${CMAKE_SOURCE_DIR}/User/Scheduler
+    ${CMAKE_SOURCE_DIR}/User/Protocol
 )
 
 # Add project symbols (macros)

@@ -21,5 +21,5 @@ uint32_t micros(void)
  */
 uint32_t millis(void)
 {
-    return micros()/1000U;
+    return HAL_GetTick();
 }
