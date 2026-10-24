@@ -7,7 +7,7 @@ import pyqtgraph as pg
 from PyQt5.QtCore import Qt, QTimer, QSettings
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QVBoxLayout, QMessageBox,
+    QApplication, QMainWindow, QVBoxLayout, QMessageBox, QPushButton,
 )
 from PyQt5 import uic
 
@@ -30,6 +30,16 @@ DEFAULT_BAUD   = 115200
 IDX_YAW, IDX_ROLL, IDX_PITCH = 0, 1, 2
 IDX_GYR, IDX_ACC, IDX_MAG, IDX_BAR = 8, 9, 10, 11
 PROTOCOL_FIELDS = 12
+
+# IMU 六面提示（物理朝向）
+FACE_TEXT = {
+    1: "+Z 平放（正面朝上）",
+    2: "-Z 倒扣（背面朝上）",
+    3: "+X 朝下（朝你那一侧）",
+    4: "-X 朝下（箭头那一侧）",
+    5: "+Y 朝下（左侧）",
+    6: "-Y 朝下（右侧）",
+}
 
 # 页面索引
 PAGE_DASHBOARD   = 0
@@ -191,10 +201,11 @@ class MainWindow(QMainWindow):
                 <h2>传感器校准指南</h2>
                 <p>左侧导航栏点击 <b>Calib</b> 进入校准页面</p>
                 <ul>
-                    <li><b>Acc & Gyr</b> 请将飞行器水平放置在桌面上,点击 Start,期间切勿移动</li>
-                    <li><b>Mag</b> 远离金属物体,拿起飞行器在空中缓慢画“8”字</li>
-                    <li><b>Bar</b> 保持环境气流稳定,静置等待进度条完成</li>
+                    <li><b>IMU</b> 先把 FACE1 放好点 Start；之后每面放好点 NEXT，最后陀螺阶段点 NEXT 后保持静止。</li>
+                    <li><b>Mag</b> 远离金属物体，拿起飞行器缓慢翻转各个方向约 10 秒（不要只平着转 yaw）。</li>
                 </ul>
+                <p><i>气压计不需要校准，开机直接读取。</i></p>
+                <p>校准过程中可以点 <b>STOP</b> 取消。</p>
             """,
             "实时数据": """
                 <h2>实时数据监控</h2>
@@ -221,33 +232,165 @@ class MainWindow(QMainWindow):
 
     # ============================================================ 校准
     def _init_calibration(self):
-        self.start_accgyr.clicked.connect(lambda: self._send_cal_cmd("accgyr"))
+        # 气压计不需要校准，隐藏原来的 BAR 列
+        for widget in (self.bar_label, self.bar_note,
+                       self.start_bar, self.reset_bar, self.progressBar_bar):
+            widget.hide()
+
+        self.accgyr_label.setText("IMU")
+        self.accgyr_note.setText(
+            "Note：\n\n"
+            "1.按提示依次将 FACE1~FACE6 朝下。\n\n"
+            "2.每面保持绝对静止。"
+        )
+        self.reset_accgyr.setText("STOP")
+        self.reset_mag.setText("STOP")
+
+        self.next_accgyr = QPushButton("NEXT")
+        self.next_accgyr.setMinimumSize(50, 30)
+        self.next_accgyr.setMaximumWidth(50)
+        self.next_accgyr.clicked.connect(self._send_cal_next)
+        self.gridLayout.addWidget(self.next_accgyr, 0, 14)
+        self.next_accgyr.hide()
+
+        self.start_accgyr.clicked.connect(lambda: self._send_cal_cmd("imu"))
         self.start_mag.clicked.connect(   lambda: self._send_cal_cmd("mag"))
-        self.start_bar.clicked.connect(   lambda: self._send_cal_cmd("bar"))
 
-        self.reset_accgyr.clicked.connect(lambda: self._reset_cal(self.progressBar_accgyr, "accgyr"))
-        self.reset_mag.clicked.connect(lambda: self._reset_cal(self.progressBar_mag, "mag"))
-        self.reset_bar.clicked.connect(lambda: self._reset_cal(self.progressBar_bar, "bar"))
+        self.reset_accgyr.clicked.connect(lambda: self._abort_cal("imu"))
+        self.reset_mag.clicked.connect(   lambda: self._abort_cal("mag"))
 
-        for pb in (self.progressBar_accgyr, self.progressBar_mag, self.progressBar_bar):
+        for pb in (self.progressBar_accgyr, self.progressBar_mag):
+            self._set_busy(pb, False)
             pb.setValue(0)
 
-        self._append_cal_log("[INFO] 校准模块就绪")
+        self._append_cal_log("[INFO] IMU / MAG 校准就绪（气压计无需校准）")
+        self._append_cal_log("[INFO] IMU：先放好 FACE1 再点 Start，之后每面放好点 NEXT")
+
+    def _cal_progress(self, sensor: str):
+        return self.progressBar_accgyr if sensor == "imu" else self.progressBar_mag
+
+    @staticmethod
+    def _set_busy(progress_bar, busy: bool):
+        if busy:
+            progress_bar.setRange(0, 0)
+        else:
+            progress_bar.setRange(0, 100)
 
     def _send_cal_cmd(self, sensor: str):
         if self.serial_thread is None or self.serial_thread.ser is None:
             self.show_warning("提示", "请先连接串口")
             return
+
         try:
-            cmd = f"cal,{sensor}\n"
+            cmd = f"cal,{sensor},start\n"
             self.serial_thread.ser.write(cmd.encode())
             self._append_cal_log(f"[TX] {cmd.strip()}")
         except Exception as e:
             self.show_warning("发送失败", str(e))
+            return
 
-    def _reset_cal(self, progress_bar, sensor: str):
+        progress_bar = self._cal_progress(sensor)
+        self._set_busy(progress_bar, False)
         progress_bar.setValue(0)
-        self._append_cal_log(f"[INFO] {sensor} 校准进度已重置")
+        self.next_accgyr.hide()
+
+    def _send_cal_next(self):
+        if self.serial_thread is None or self.serial_thread.ser is None:
+            self.show_warning("提示", "请先连接串口")
+            return
+
+        try:
+            cmd = "cal,imu,next\n"
+            self.serial_thread.ser.write(cmd.encode())
+            self._append_cal_log(f"[TX] {cmd.strip()}")
+        except Exception as e:
+            self.show_warning("发送失败", str(e))
+            return
+
+        self.next_accgyr.hide()
+
+    def _abort_cal(self, sensor: str):
+        if self.serial_thread is not None and self.serial_thread.ser is not None:
+            try:
+                cmd = f"cal,{sensor},abort\n"
+                self.serial_thread.ser.write(cmd.encode())
+                self._append_cal_log(f"[TX] {cmd.strip()}")
+            except Exception as e:
+                self.show_warning("发送失败", str(e))
+
+        progress_bar = self._cal_progress(sensor)
+        self._set_busy(progress_bar, False)
+        progress_bar.setValue(0)
+        self.next_accgyr.hide()
+        self._append_cal_log(f"[INFO] {sensor.upper()} 校准已停止")
+
+    def _handle_cal_line(self, line: str):
+        self._append_cal_log(f"[RX] {line}")
+
+        parts = line.split(",")
+        if len(parts) < 3:
+            return
+
+        sensor = parts[1].strip().lower()
+        state  = parts[2].strip().upper()
+        detail = parts[3].strip().upper() if len(parts) > 3 else ""
+
+        name = sensor.upper()
+        progress_bar = self._cal_progress(sensor)
+
+        self.next_accgyr.hide()
+
+        if state == "CHECK":
+            self._set_busy(progress_bar, False)
+            progress_bar.setValue(0)
+            self._append_cal_log(f"[INFO] 请将 FACE1：{FACE_TEXT[1]} 放好，保持静止...")
+
+        elif state == "COLLECT":
+            if sensor == "imu":
+                self._set_busy(progress_bar, False)
+                if detail.startswith("FACE"):
+                    face = int(detail[4:]) if detail[4:].isdigit() else 0
+                    progress_bar.setValue(min(90, max(0, (face - 1) * 15)))
+                    self._append_cal_log(f"[INFO] 正在采集 FACE{face}...")
+                elif detail == "GYRO":
+                    progress_bar.setValue(90)
+                    self._append_cal_log("[INFO] 正在采集陀螺零偏...")
+            else:
+                self._set_busy(progress_bar, True)
+                self._append_cal_log("[INFO] 请缓慢翻转板子，覆盖各个方向（约 10 秒）")
+
+        elif state == "WAIT":
+            self._set_busy(progress_bar, False)
+            if detail == "GYRO":
+                progress_bar.setValue(90)
+                self._append_cal_log("[INFO] 请保持静止，然后点击 NEXT 采集陀螺")
+            elif detail.startswith("FACE"):
+                face = int(detail[4:]) if detail[4:].isdigit() else 0
+                progress_bar.setValue(min(90, max(0, (face - 1) * 15)))
+                self._append_cal_log(f"[INFO] 请将 {FACE_TEXT.get(face, detail)}，然后点击 NEXT")
+            self.next_accgyr.show()
+
+        elif state == "DONE":
+            self._set_busy(progress_bar, False)
+            progress_bar.setValue(100)
+            self._append_cal_log(f"[INFO] {name} 校准完成")
+
+        elif state == "ERROR":
+            self._set_busy(progress_bar, False)
+            progress_bar.setValue(0)
+            if sensor == "mag" and detail == "6":
+                self._append_cal_log("[ERROR] MAG 采样范围不足，请各方向翻转后重试")
+            else:
+                self._append_cal_log(f"[ERROR] {name} 校准失败，代码 {detail or '?'}")
+
+        elif state == "IDLE":
+            self._set_busy(progress_bar, False)
+            progress_bar.setValue(0)
+            if detail == "ABORTED":
+                self._append_cal_log(f"[INFO] {name} 校准已取消")
+
+        elif state == "BUSY":
+            self._append_cal_log(f"[WARN] {name} 正在校准中")
 
     def _append_cal_log(self, text: str):
         self.calib_text.appendPlainText(text)
@@ -314,8 +457,8 @@ class MainWindow(QMainWindow):
         # ============================================================
         normal_btns = [
             self.theme_button, self.refresh_button, self.link_button,
-            self.start_accgyr, self.start_mag, self.start_bar,
-            self.reset_accgyr, self.reset_mag, self.reset_bar
+            self.start_accgyr, self.start_mag, self.next_accgyr,
+            self.reset_accgyr, self.reset_mag
         ]
         
         if theme_name == "dark":
@@ -447,6 +590,12 @@ class MainWindow(QMainWindow):
         self.link_button.setText("CONNECT")
         self.link_status.setText("NOT CONNECTED")
 
+        for pb in (self.progressBar_accgyr, self.progressBar_mag):
+            self._set_busy(pb, False)
+            pb.setValue(0)
+
+        self.next_accgyr.hide()
+
     def on_connection_result(self, success: bool, error_msg: str):
         if success:
             self.link_button.setText("DISCONNECT")
@@ -481,8 +630,8 @@ class MainWindow(QMainWindow):
 
     def on_data(self, line: str):
         upper = line.upper()
-        if upper.startswith("CAL,") or upper.startswith("CAL "):
-            self._append_cal_log(f"[RX] {line}")
+        if upper.startswith("CAL,"):
+            self._handle_cal_line(line)
             return
 
         data = self._parse_line(line)

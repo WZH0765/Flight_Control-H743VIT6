@@ -85,7 +85,7 @@ extern health_t GYR_Health;
 extern health_t MAG_Health;
 extern health_t BAR_Health;
 
+void IMU_Read(void);
+void MAG_Read(void);
+void BAR_Read(void);
 void Hardware_Init(void);
-void Hardware_IMURead(void);
-void Hardware_MAGRead(void);
-void Hardware_BARRead(void);

@@ -131,7 +131,7 @@ void Hardware_Init(void)
 *  返回值：无
 *  说  明：读取加速度/角速度，换算为机体系SI单位
 ****************/
-void Hardware_IMURead(void)
+void IMU_Read(void)
 {
     ICM42605_AccRead(&ICM42605_Device1);
     Health_Update(&ACC_Health,ICM42605_Device1.Acc[0],ICM42605_Device1.Acc[1],ICM42605_Device1.Acc[2]);
@@ -157,7 +157,7 @@ void Hardware_IMURead(void)
 *  返回值：无
 *  说  明：读取三轴磁场
 ****************/
-void Hardware_MAGRead(void)
+void MAG_Read(void)
 {
 #ifdef USE_IST8310
     IST8310_Read(&IST8310_Device);
@@ -185,7 +185,7 @@ void Hardware_MAGRead(void)
 *  返回值：无
 *  说  明：读取气压与温度
 ****************/
-void Hardware_BARRead(void)
+void BAR_Read(void)
 {
     DPS310_Read(&DPS310_Device);
     Health_Update(&BAR_Health,DPS310_Device.Pressure,DPS310_Device.Temperature,0);

@@ -1,17 +1,13 @@
-#include "Protocol.h"
+#include <ctype.h>
+#include "Calib.h"
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h>
 #include <stdbool.h>
+#include "Protocol.h"
 
-#define RX_BUF_SIZE     256
-
-static char Cmd_Buffer[96];
-static uint8_t Cmd_Index = 0;
-
-static volatile uint16_t Rx_Head = 0;
-static volatile uint16_t Rx_Tail = 0;
-static volatile uint8_t  Rx_Buffer[RX_BUF_SIZE];
+static volatile uint16_t Head = 0;
+static volatile uint16_t Tail = 0;
+static volatile uint8_t  Buffer[BUF_SIZE];
 
 /***************
 *  接收一个字节
@@ -19,14 +15,14 @@ static volatile uint8_t  Rx_Buffer[RX_BUF_SIZE];
 *  形  参：待接收的字节
 *  说  明：在USB中断里调用，把字节放进环形缓冲
 ****************/
-void Protocol_WriteBuf(uint8_t Data)
+void Prot_WriteBuf(uint8_t Data)
 {
-    uint16_t Next_Head = (Rx_Head + 1) % RX_BUF_SIZE;
+    uint16_t Next_Head = (Head + 1) % BUF_SIZE;
 
-    if(Next_Head != Rx_Tail)
+    if(Next_Head != Tail)
     {
-        Rx_Buffer[Rx_Head] = Data;
-        Rx_Head = Next_Head;
+        Buffer[Head] = Data;
+        Head = Next_Head;
     }
 }
 
@@ -35,62 +31,64 @@ void Protocol_WriteBuf(uint8_t Data)
 *
 *  形  参：存放字节的地址
 ****************/
-static bool Protocol_ReadBuf(uint8_t *Data)
+bool Prot_ReadBuf(uint8_t *Data)
 {
-    if(Rx_Head == Rx_Tail) return false;
+    if(Head == Tail) return false;
 
-    *Data = Rx_Buffer[Rx_Tail];
-    Rx_Tail = (Rx_Tail + 1) % RX_BUF_SIZE;
+    *Data = Buffer[Tail];
+    Tail = (Tail + 1) % BUF_SIZE;
 
     return true;
 }
 
-/*******************
-* 解析一条命令
-*
-* 命令格式：CAL <IMU|MAG|BAR>
-*******************/
-static void Protocol_Process(char *Cmd)
+void Prot_Process(char *Cmd)
 {
+    sensor_t Sensor;
     char Name[16] = {0};
     char Arg1[16] = {0};
-    const char *Sensor = NULL;
+    char Arg2[16] = {0};
 
     for(uint8_t i = 0;Cmd[i] != '\0';i ++)
     {
         Cmd[i] = (char)toupper((unsigned char)Cmd[i]);
         if(Cmd[i] == ',') Cmd[i] = ' ';
     }
-
-    sscanf(Cmd,"%15s %15s",Name,Arg1);
+    sscanf(Cmd,"%15s %15s %15s",Name,Arg1,Arg2);
 
     if(strcmp(Name,"CAL") != 0) return;
-    if(strcmp(Arg1,"IMU") == 0) Sensor = "IMU";
-    else if(strcmp(Arg1,"MAG") == 0) Sensor = "MAG";
-    else if(strcmp(Arg1,"BAR") == 0) Sensor = "BAR";
+
+/*校准外设选择*/
+    if(strcmp(Arg1,"IMU") == 0) Sensor = IMU;
+    else if(strcmp(Arg1,"MAG") == 0) Sensor = MAG;
     else return;
 
-    printf("CAL,%s,IDLE,0,NOT_READY\r\n",Sensor);
+/*校准开始&终止*/
+    if(strcmp(Arg2,"ABORT") == 0) Cal_Abort();
+    else if(strcmp(Arg2,"START") == 0 || strcmp(Arg2,"NEXT") == 0) Cal_Start(Sensor);
 }
 
 /***************
-*  协议接收
+*  数据接收
 *
 *  形  参：无
-*  说  明：从环形缓冲取字节，攒够一行就解析
+*  说  明：从环形缓冲取字节
 ****************/
-void Protocol_Receive(void)
+
+void Prot_Receive(void)
 {
     uint8_t Byte = 0;
+    static uint8_t Cmd_Index = 0;
+    static char    Cmd_Buffer[96];
 
-    while(Protocol_ReadBuf(&Byte))
+    while(Prot_ReadBuf(&Byte))
     {
         if(Byte == '\n' || Byte == '\r')
         {
             if(Cmd_Index > 0)
             {
                 Cmd_Buffer[Cmd_Index] = '\0';
-                Protocol_Process(Cmd_Buffer);
+                Prot_Process(Cmd_Buffer);
+
                 Cmd_Index = 0;
             }
         }

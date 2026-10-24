@@ -36,7 +36,7 @@
 
 // #define USER_DEBUG_AHRS
 // #define USER_DEBUG_DEVICE
-// #define USER_DEBUG_HOST_TOOL
+#define USER_DEBUG_HOST_TOOL
 
 /* USER CODE END PD */
 
