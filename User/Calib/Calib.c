@@ -170,18 +170,31 @@ static void Cal_IMU(void)
 
                 if(Samples >= GYRO_SAMPLES)
                 {
-                    /*物理面：1:+Z 2:-Z 3:+X 4:-X 5:+Y 6:-Y*/
-                    const uint8_t Plus[3]  = {3,5,0};   //算法 +X/+Y/+Z
-                    const uint8_t Minus[3] = {2,4,1};   //算法 -X/-Y/-Z
+                    /*AHRS期望比力向上（水平时Acc=(0,0,-g)），Plus取Acc为+g的面*/
+                    const uint8_t Plus[3]  = {3,5,1};   //FACE4/6/2
+                    const uint8_t Minus[3] = {2,4,0};   //FACE3/5/1
+
+                    bool Valid = true;
 
                     for(uint8_t i = 0;i < 3;i ++)
                     {
                         float P = Acc_Sum[Plus[i]][i]/FACE_SAMPLES;
                         float M = Acc_Sum[Minus[i]][i]/FACE_SAMPLES;
 
-                        Acc_Bias[i]  = (P + M)*0.5f;
+                        Acc_Bias[i] = (P + M)*0.5f;
                         Acc_Scal[i] = (P - M)/(2.0f*GRAVITY);
-                        Gyr_Bias[i]  = Gyr_Sum[i]/GYRO_SAMPLES;
+                        Gyr_Bias[i] = Gyr_Sum[i]/GYRO_SAMPLES;
+
+                        if(Acc_Scal[i] < 0.0f) Valid = false;
+                    }
+
+                    if(Valid == false)
+                    {
+                        IMU_Valid = false;
+                        printf("CAL,IMU,SCALE,%.2f,%.2f,%.2f\r\n",Acc_Scal[0],Acc_Scal[1],Acc_Scal[2]);
+                        printf("CAL,IMU,ERROR,7\r\n");
+                        State = IDLE;
+                        break;
                     }
 
                     IMU_Valid = true;

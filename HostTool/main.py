@@ -4,10 +4,11 @@ from collections import deque
 
 import serial.tools.list_ports
 import pyqtgraph as pg
-from PyQt5.QtCore import Qt, QTimer, QSettings
-from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import Qt, QTimer, QSettings, QPointF
+from PyQt5.QtGui import QIcon, QPainter, QColor, QPen, QPolygonF
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QVBoxLayout, QMessageBox, QPushButton,
+    QApplication, QMainWindow, QVBoxLayout, QMessageBox,
+    QFrame, QLabel, QGridLayout, QWidget,
 )
 from PyQt5 import uic
 
@@ -33,13 +34,24 @@ PROTOCOL_FIELDS = 12
 
 # IMU 六面提示（物理朝向）
 FACE_TEXT = {
-    1: "+Z 平放（正面朝上）",
-    2: "-Z 倒扣（背面朝上）",
-    3: "+X 朝下（朝你那一侧）",
-    4: "-X 朝下（箭头那一侧）",
-    5: "+Y 朝下（左侧）",
-    6: "-Y 朝下（右侧）",
+    1: "+Z 朝下（箭头面/背面朝上，平放）",
+    2: "-Z 朝下（元件面/正面朝上，倒扣）",
+    3: "+X 朝下（箭头/机头侧朝下）",
+    4: "-X 朝下（机尾侧朝下）",
+    5: "+Y 朝下（右侧朝下）",
+    6: "-Y 朝下（左侧朝下）",
 }
+
+FACE_SHORT = {
+    1: "+Z 箭头面朝上",
+    2: "-Z 元件面朝上",
+    3: "+X 机头朝下",
+    4: "-X 机尾朝下",
+    5: "+Y 右侧朝下",
+    6: "-Y 左侧朝下",
+}
+
+FACE_COLOR = "#4FC3F7"
 
 # 页面索引
 PAGE_DASHBOARD   = 0
@@ -57,6 +69,145 @@ def resource_path(relative_path: str) -> str:
 
 
 UI_PATH = resource_path("FC Configurator.ui")
+
+
+# ---------------------------------------------------------------- 校准卡片
+class FaceIcon(QWidget):
+    """IMU 六面朝向的小板子示意图"""
+
+    def __init__(self, face: int, parent=None):
+        super().__init__(parent)
+        self.face = face
+        self.state = "idle"
+        self.setMinimumSize(120, 72)
+
+    def set_state(self, state: str):
+        self.state = state
+        self.update()
+
+    def _paint_flat(self, painter, scale, ox, oy, c_line):
+        def P(x, y):
+            return QPointF(ox + x*scale, oy + y*scale)
+
+        pen = QPen(QColor(140, 150, 165, 110))
+        pen.setWidthF(max(1.0, 1.2*scale))
+        pen.setStyle(Qt.DashLine)
+        painter.setPen(pen)
+        painter.drawLine(P(30, 168), P(230, 168))
+
+        pen = QPen(c_line)
+        pen.setWidthF(max(1.2, 1.6*scale))
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawPolygon(QPolygonF([P(75, 20), P(205, 20), P(205, 150), P(75, 150)]))
+
+        if self.face == 1:
+            painter.drawPolygon(QPolygonF([P(140, 42), P(105, 125), P(140, 108), P(175, 125)]))
+        else:
+            painter.drawPolygon(QPolygonF([P(115, 60), P(165, 60), P(165, 110), P(115, 110)]))
+
+    def _paint_vertical(self, painter, scale, ox, oy, c_line):
+        def P(x, y):
+            return QPointF(ox + x*scale, oy + y*scale)
+
+        pen = QPen(QColor(140, 150, 165, 110))
+        pen.setWidthF(max(1.0, 1.2*scale))
+        pen.setStyle(Qt.DashLine)
+        painter.setPen(pen)
+        painter.drawLine(P(30, 168), P(230, 168))
+
+        pen = QPen(c_line)
+        pen.setWidthF(max(1.2, 1.6*scale))
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawPolygon(QPolygonF([P(75, 20), P(205, 20), P(205, 150), P(75, 150)]))
+
+        if self.face == 3:
+            painter.drawPolygon(QPolygonF([P(115, 60), P(165, 60), P(165, 110), P(115, 110)]))
+        else:
+            painter.drawPolygon(QPolygonF([P(140, 42), P(105, 125), P(140, 108), P(175, 125)]))
+
+    def _paint_edge(self, painter, scale, ox, oy, c_line):
+        def P(x, y):
+            return QPointF(ox + x*scale, oy + y*scale)
+
+        pen = QPen(QColor(140, 150, 165, 110))
+        pen.setWidthF(max(1.0, 1.2*scale))
+        pen.setStyle(Qt.DashLine)
+        painter.setPen(pen)
+        painter.drawLine(P(30, 168), P(230, 168))
+
+        pen = QPen(c_line)
+        pen.setWidthF(max(1.2, 1.6*scale))
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+
+        painter.drawPolygon(QPolygonF([P(125, 20), P(145, 20), P(145, 150), P(125, 150)]))
+
+        if self.face == 5:
+            painter.drawPolygon(QPolygonF([P(105, 65), P(125, 65), P(125, 100), P(105, 100)]))
+        else:
+            painter.drawPolygon(QPolygonF([P(145, 65), P(165, 65), P(165, 100), P(145, 100)]))
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        scale = min(self.width()/260.0, self.height()/180.0)
+        ox = (self.width() - 260*scale)*0.5
+        oy = (self.height() - 180*scale)*0.5
+
+        if self.state == "done":
+            c_line = QColor(FACE_COLOR)
+        else:
+            c_line = QColor("#8C96A5")
+
+        if self.face in (1, 2):
+            self._paint_flat(painter, scale, ox, oy, c_line)
+        elif self.face in (3, 4):
+            self._paint_vertical(painter, scale, ox, oy, c_line)
+        else:
+            self._paint_edge(painter, scale, ox, oy, c_line)
+
+        painter.end()
+
+
+class FaceTile(QFrame):
+
+    def __init__(self, face: int, parent=None):
+        super().__init__(parent)
+        self.setObjectName("faceTile")
+        self.setProperty("state", "idle")
+        self.setFixedSize(168, 124)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 3, 4, 3)
+        layout.setSpacing(1)
+
+        self.icon = FaceIcon(face)
+        self.icon.setFixedHeight(88)
+
+        self.title = QLabel(f"FACE{face}  {FACE_SHORT[face]}")
+        self.title.setAlignment(Qt.AlignCenter)
+        self.title.setStyleSheet("font-size: 10pt;")
+
+        layout.addWidget(self.icon)
+        layout.addWidget(self.title)
+
+        self.set_state("idle")
+
+    def set_state(self, state: str):
+        self.setProperty("state", state)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.icon.set_state(state)
+
+        if state in ("active", "done"):
+            self.title.setStyleSheet(f"font-size: 10pt; color: {FACE_COLOR};")
+        else:
+            self.title.setStyleSheet("font-size: 10pt;")
 
 
 # ---------------------------------------------------------------- 主窗口
@@ -201,7 +352,7 @@ class MainWindow(QMainWindow):
                 <h2>传感器校准指南</h2>
                 <p>左侧导航栏点击 <b>Calib</b> 进入校准页面</p>
                 <ul>
-                    <li><b>IMU</b> 先把 FACE1 放好点 Start；之后每面放好点 NEXT，最后陀螺阶段点 NEXT 后保持静止。</li>
+                    <li><b>IMU</b> 先把 FACE1（箭头面朝上）放好点 Start；之后按图示逐面放好点 NEXT，最后陀螺阶段保持静止。</li>
                     <li><b>Mag</b> 远离金属物体，拿起飞行器缓慢翻转各个方向约 10 秒（不要只平着转 yaw）。</li>
                 </ul>
                 <p><i>气压计不需要校准，开机直接读取。</i></p>
@@ -238,23 +389,27 @@ class MainWindow(QMainWindow):
             widget.hide()
 
         self.accgyr_label.setText("IMU")
-        self.accgyr_note.setText(
-            "Note：\n\n"
-            "1.按提示依次将 FACE1~FACE6 朝下。\n\n"
-            "2.每面保持绝对静止。"
-        )
+        self.accgyr_note.setText("按图示摆放\n放稳后点 NEXT")
         self.reset_accgyr.setText("STOP")
         self.reset_mag.setText("STOP")
 
-        self.next_accgyr = QPushButton("NEXT")
-        self.next_accgyr.setMinimumSize(50, 30)
-        self.next_accgyr.setMaximumWidth(50)
-        self.next_accgyr.clicked.connect(self._send_cal_next)
-        self.gridLayout.addWidget(self.next_accgyr, 0, 14)
-        self.next_accgyr.hide()
+        self.face_tiles = {}
+        self.face_panel = QWidget()
+        face_layout = QGridLayout(self.face_panel)
+        face_layout.setContentsMargins(0, 0, 0, 0)
+        face_layout.setSpacing(6)
+        for face in range(1, 7):
+            tile = FaceTile(face)
+            self.face_tiles[face] = tile
+            face_layout.addWidget(tile, (face - 1) // 3, (face - 1) % 3)
+        self.gridLayout.addWidget(self.face_panel, 0, 2, 2, 8)
 
-        self.start_accgyr.clicked.connect(lambda: self._send_cal_cmd("imu"))
+        self.gridLayout.removeWidget(self.mag_note)
+        self.gridLayout.addWidget(self.mag_note, 2, 1, 1, 9)
+
+        self.start_accgyr.clicked.connect(self._on_imu_button)
         self.start_mag.clicked.connect(   lambda: self._send_cal_cmd("mag"))
+        self._imu_button("Start", True)
 
         self.reset_accgyr.clicked.connect(lambda: self._abort_cal("imu"))
         self.reset_mag.clicked.connect(   lambda: self._abort_cal("mag"))
@@ -269,12 +424,39 @@ class MainWindow(QMainWindow):
     def _cal_progress(self, sensor: str):
         return self.progressBar_accgyr if sensor == "imu" else self.progressBar_mag
 
+    def _reset_faces(self):
+        for tile in self.face_tiles.values():
+            tile.set_state("idle")
+
+    def _set_face_stage(self, face: int):
+        for n, tile in self.face_tiles.items():
+            if n < face:
+                tile.set_state("done")
+            elif n == face:
+                tile.set_state("active")
+            else:
+                tile.set_state("idle")
+
+    def _finish_faces(self):
+        for tile in self.face_tiles.values():
+            tile.set_state("done")
+
     @staticmethod
     def _set_busy(progress_bar, busy: bool):
         if busy:
             progress_bar.setRange(0, 0)
         else:
             progress_bar.setRange(0, 100)
+
+    def _on_imu_button(self):
+        if self.start_accgyr.text() == "NEXT":
+            self._send_cal_next()
+        else:
+            self._send_cal_cmd("imu")
+
+    def _imu_button(self, text: str, enabled: bool = True):
+        self.start_accgyr.setText(text)
+        self.start_accgyr.setEnabled(enabled)
 
     def _send_cal_cmd(self, sensor: str):
         if self.serial_thread is None or self.serial_thread.ser is None:
@@ -292,7 +474,10 @@ class MainWindow(QMainWindow):
         progress_bar = self._cal_progress(sensor)
         self._set_busy(progress_bar, False)
         progress_bar.setValue(0)
-        self.next_accgyr.hide()
+
+        if sensor == "imu":
+            self._imu_button("Start", False)
+            self._reset_faces()
 
     def _send_cal_next(self):
         if self.serial_thread is None or self.serial_thread.ser is None:
@@ -307,7 +492,7 @@ class MainWindow(QMainWindow):
             self.show_warning("发送失败", str(e))
             return
 
-        self.next_accgyr.hide()
+        self._imu_button("Start", False)
 
     def _abort_cal(self, sensor: str):
         if self.serial_thread is not None and self.serial_thread.ser is not None:
@@ -321,7 +506,11 @@ class MainWindow(QMainWindow):
         progress_bar = self._cal_progress(sensor)
         self._set_busy(progress_bar, False)
         progress_bar.setValue(0)
-        self.next_accgyr.hide()
+
+        if sensor == "imu":
+            self._imu_button("Start", True)
+            self._reset_faces()
+
         self._append_cal_log(f"[INFO] {sensor.upper()} 校准已停止")
 
     def _handle_cal_line(self, line: str):
@@ -338,23 +527,28 @@ class MainWindow(QMainWindow):
         name = sensor.upper()
         progress_bar = self._cal_progress(sensor)
 
-        self.next_accgyr.hide()
-
         if state == "CHECK":
             self._set_busy(progress_bar, False)
             progress_bar.setValue(0)
             self._append_cal_log(f"[INFO] 请将 FACE1：{FACE_TEXT[1]} 放好，保持静止...")
+            if sensor == "imu":
+                self._imu_button("Start", False)
+                self._reset_faces()
+                self.face_tiles[1].set_state("active")
 
         elif state == "COLLECT":
             if sensor == "imu":
+                self._imu_button("Start", False)
                 self._set_busy(progress_bar, False)
                 if detail.startswith("FACE"):
                     face = int(detail[4:]) if detail[4:].isdigit() else 0
                     progress_bar.setValue(min(90, max(0, (face - 1) * 15)))
                     self._append_cal_log(f"[INFO] 正在采集 FACE{face}...")
+                    self._set_face_stage(face)
                 elif detail == "GYRO":
                     progress_bar.setValue(90)
                     self._append_cal_log("[INFO] 正在采集陀螺零偏...")
+                    self._finish_faces()
             else:
                 self._set_busy(progress_bar, True)
                 self._append_cal_log("[INFO] 请缓慢翻转板子，覆盖各个方向（约 10 秒）")
@@ -364,33 +558,52 @@ class MainWindow(QMainWindow):
             if detail == "GYRO":
                 progress_bar.setValue(90)
                 self._append_cal_log("[INFO] 请保持静止，然后点击 NEXT 采集陀螺")
+                self._finish_faces()
             elif detail.startswith("FACE"):
                 face = int(detail[4:]) if detail[4:].isdigit() else 0
                 progress_bar.setValue(min(90, max(0, (face - 1) * 15)))
                 self._append_cal_log(f"[INFO] 请将 {FACE_TEXT.get(face, detail)}，然后点击 NEXT")
-            self.next_accgyr.show()
+                self._set_face_stage(face)
+            if sensor == "imu":
+                self._imu_button("NEXT", True)
+
+        elif state == "SCALE":
+            self._append_cal_log(f"[INFO] Acc_Scal = {detail}")
 
         elif state == "DONE":
             self._set_busy(progress_bar, False)
             progress_bar.setValue(100)
             self._append_cal_log(f"[INFO] {name} 校准完成")
+            if sensor == "imu":
+                self._imu_button("Start", True)
+                self._finish_faces()
 
         elif state == "ERROR":
             self._set_busy(progress_bar, False)
             progress_bar.setValue(0)
             if sensor == "mag" and detail == "6":
                 self._append_cal_log("[ERROR] MAG 采样范围不足，请各方向翻转后重试")
+            elif sensor == "imu" and detail == "7":
+                self._append_cal_log("[ERROR] IMU 轴向反了（或 FACE3~6 放反），检查 Hardware/Plus/Minus")
             else:
                 self._append_cal_log(f"[ERROR] {name} 校准失败，代码 {detail or '?'}")
+            if sensor == "imu":
+                self._imu_button("Start", True)
+                self._reset_faces()
 
         elif state == "IDLE":
             self._set_busy(progress_bar, False)
             progress_bar.setValue(0)
             if detail == "ABORTED":
                 self._append_cal_log(f"[INFO] {name} 校准已取消")
+            if sensor == "imu":
+                self._imu_button("Start", True)
+                self._reset_faces()
 
         elif state == "BUSY":
             self._append_cal_log(f"[WARN] {name} 正在校准中")
+            if sensor == "imu":
+                self._imu_button("Start", True)
 
     def _append_cal_log(self, text: str):
         self.calib_text.appendPlainText(text)
@@ -415,6 +628,14 @@ class MainWindow(QMainWindow):
             QFrame#calib_frame     {{ background-color: {t['plot_frame']}; }}
             QFrame#about_frame     {{ background-color: {t['plot_frame']}; }}
             QFrame#line_frame      {{ background-color: {t['plot_grid']}; }}
+
+            QFrame#faceTile {{
+                border: 1px solid {t['plot_grid']};
+                border-radius: 8px;
+                background-color: rgba(255, 255, 255, 8);
+            }}
+            QFrame#faceTile[state="active"] {{ border: 2px solid {FACE_COLOR}; }}
+            QFrame#faceTile[state="done"]   {{ border: 2px solid {FACE_COLOR}; }}
 
             QPlainTextEdit {{
                 background-color: {t['plot_bg']};
@@ -457,7 +678,7 @@ class MainWindow(QMainWindow):
         # ============================================================
         normal_btns = [
             self.theme_button, self.refresh_button, self.link_button,
-            self.start_accgyr, self.start_mag, self.next_accgyr,
+            self.start_accgyr, self.start_mag,
             self.reset_accgyr, self.reset_mag
         ]
         
@@ -594,7 +815,7 @@ class MainWindow(QMainWindow):
             self._set_busy(pb, False)
             pb.setValue(0)
 
-        self.next_accgyr.hide()
+        self._imu_button("Start", True)
 
     def on_connection_result(self, success: bool, error_msg: str):
         if success:

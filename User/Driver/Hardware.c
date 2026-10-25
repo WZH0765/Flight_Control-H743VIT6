@@ -136,7 +136,7 @@ void IMU_Read(void)
     ICM42605_AccRead(&ICM42605_Device1);
     Health_Update(&ACC_Health,ICM42605_Device1.Acc[0],ICM42605_Device1.Acc[1],ICM42605_Device1.Acc[2]);
 
-    /*硬件坐标系 -> 算法坐标系*/
+    /*ICM42605 原始X/Y与板子NED反向，取反后为NED（X箭头/机头，Y右，Z下）*/
     HW_Sample.Acc[0] = -ICM42605_Device1.Acc[0]/ACC_SCALE*GRAVITY;
     HW_Sample.Acc[1] = -ICM42605_Device1.Acc[1]/ACC_SCALE*GRAVITY;
     HW_Sample.Acc[2] =  ICM42605_Device1.Acc[2]/ACC_SCALE*GRAVITY;
@@ -144,7 +144,7 @@ void IMU_Read(void)
     ICM42605_GyrRead(&ICM42605_Device1);
     Health_Update(&GYR_Health,ICM42605_Device1.Gyr[0],ICM42605_Device1.Gyr[1],ICM42605_Device1.Gyr[2]);
 
-    /*硬件坐标系 -> 算法坐标系*/
+    /*ICM42605 原始X/Y与板子NED反向，取反后为NED（X箭头/机头，Y右，Z下）*/
     HW_Sample.Gyr[0] = -ICM42605_Device1.Gyr[0]/GYR_SCALE;
     HW_Sample.Gyr[1] = -ICM42605_Device1.Gyr[1]/GYR_SCALE;
     HW_Sample.Gyr[2] =  ICM42605_Device1.Gyr[2]/GYR_SCALE;
