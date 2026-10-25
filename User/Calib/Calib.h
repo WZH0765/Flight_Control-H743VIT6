@@ -2,15 +2,15 @@
 
 #include <stdbool.h>
 
-#define STILL_MS        500
-#define SETTLE_MS       500
-#define ERROR_GYR       0.0025f
-#define MAG_SAMPLES     1000
-#define FACE_SAMPLES    500
-#define GYRO_SAMPLES    3000
-#define MAG_MIN_RANGE   100.0f
-#define ERROR_ACC_MIN   9.30f
-#define ERROR_ACC_MAX   10.3f
+#define STILL_MS      500
+#define SETTLE_MS     500
+#define ERROR_GYR     0.0025f
+#define MAG_SAMPLES   1000
+#define ACC_SAMPLES   500
+#define GYR_SAMPLES   3000
+#define RANGE_MAG_MIN 100.0f
+#define ERROR_ACC_MIN 9.30f
+#define ERROR_ACC_MAX 10.3f
 
 typedef enum
 {
@@ -25,17 +25,16 @@ typedef enum
     CHECK   ,
     WAIT    ,
     REQUEST ,
-    COLLECT ,
-    SOLVE
+    COLLECT
 
 } state_t;
 
-extern bool  IMU_Valid;
-extern bool  MAG_Valid;
 extern float Acc_Bias[3];
 extern float Gyr_Bias[3];
 extern float Mag_Bias[3];
 extern float Acc_Scal[3];
+extern bool  IMU_CalValid;
+extern bool  MAG_CalValid;
 
 void Cal_Run(void);
 void Cal_Abort(void);

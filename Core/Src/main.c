@@ -3,7 +3,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "Health.h"
 #include "i2c.h"
 #include "sdmmc.h"
 #include "spi.h"
@@ -17,6 +16,7 @@
 #include "Task.h"
 #include "AHRS.h"
 #include <stdio.h>
+#include "Health.h"
 #include "SysTime.h"
 #include "Hardware.h"
 #include "Scheduler.h"

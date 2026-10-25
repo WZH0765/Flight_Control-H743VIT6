@@ -1,5 +1,6 @@
 #include "Calib.h"
 #include <stdio.h>
+#include <string.h>
 #include "SysTime.h"
 #include "Hardware.h"
 
@@ -13,12 +14,13 @@ float Mag_Bias[3];
 float Acc_Scal[3];
 
 bool Next = false;
-bool IMU_Valid = false;
-bool MAG_Valid = false;
+bool IMU_CalValid = false;
+bool MAG_CalValid = false;
 
 void Cal_Start(sensor_t Sensor)
 {
-    if(Sensor == IMU && Mode == IMU && State == WAIT)
+    if((Sensor == IMU && Mode == IMU && State == WAIT)||
+       (Sensor == MAG && Mode == MAG && State == WAIT))
     {
         Next = true;
         return;
@@ -56,17 +58,18 @@ static void Cal_IMU(void)
 
     static uint8_t  Face = 0;
     static uint16_t Samples = 0;
-    static uint32_t PhaseStart = 0;
+    static uint32_t TimeStamp = 0;
 
     static float    Gyr_Sum[3];
     static float    Acc_Sum[6][3];
 
+    //允许进行下一步操作
     if(Next == true)
     {
-        Next       = false;
-        Samples    = 0;
-        PhaseStart = Now;
-        State      = COLLECT;
+        Samples   = 0;
+        TimeStamp = Now;
+        Next      = false;
+        State     = COLLECT;
 
         if(Face < 6)
         {
@@ -80,28 +83,14 @@ static void Cal_IMU(void)
 
     switch(State)
     {
-        case IDLE:
-        case WAIT:
-            break;
-
         case REQUEST:
-            State      = CHECK;
-            Face       = 0;
-            Samples    = 0;
-            PhaseStart = Now;
+            Face      = 0;
+            Samples   = 0;
+            TimeStamp = Now;
+            State     = CHECK;
 
-            for(uint8_t i = 0;i < 6;i ++)
-            {
-                for(uint8_t j = 0;j < 3;j ++)
-                {
-                    Acc_Sum[i][j] = 0.0f;
-                }
-            }
-
-            for(uint8_t i = 0;i < 3;i ++)
-            {
-                Gyr_Sum[i] = 0.0f;
-            }
+            memset(Acc_Sum,0,sizeof(Acc_Sum));
+            memset(Gyr_Sum,0,sizeof(Gyr_Sum));
 
             printf("CAL,IMU,CHECK\r\n");
             break;
@@ -119,24 +108,23 @@ static void Cal_IMU(void)
                A2 <  ERROR_ACC_MIN*ERROR_ACC_MIN ||
                A2 >  ERROR_ACC_MAX*ERROR_ACC_MAX)
             {
-                PhaseStart = Now;
+                TimeStamp = Now;
             }
-            else if(Now - PhaseStart >= STILL_MS)
+            else if(Now - TimeStamp >= STILL_MS)
             {
-                State      = COLLECT;
-                Face       = 0;
-                Samples    = 0;
-                PhaseStart = Now;
+                Face      = 0;
+                Samples   = 0;
+                TimeStamp = Now;
+                State     = COLLECT;
 
                 printf("CAL,IMU,COLLECT,FACE1\r\n");
             }
             break;
 
         case COLLECT:
-            if(Now - PhaseStart < SETTLE_MS) break;
+            if(Now - TimeStamp < SETTLE_MS) break;
 
             Samples ++;
-
             if(Face < 6)
             {
                 for(uint8_t i = 0;i < 3;i ++)
@@ -144,12 +132,13 @@ static void Cal_IMU(void)
                     Acc_Sum[Face][i] += HW_Sample.Acc[i];
                 }
 
-                if(Samples >= FACE_SAMPLES)
+                //切换等待下一面
+                if(Samples >= ACC_SAMPLES)
                 {
                     Face ++;
-                    Samples    = 0;
-                    PhaseStart = Now;
-                    State      = WAIT;
+                    Samples   = 0;
+                    TimeStamp = Now;
+                    State     = WAIT;
 
                     if(Face < 6)
                     {
@@ -168,42 +157,48 @@ static void Cal_IMU(void)
                     Gyr_Sum[i] += HW_Sample.Gyr[i];
                 }
 
-                if(Samples >= GYRO_SAMPLES)
+                if(Samples >= GYR_SAMPLES)
                 {
-                    /*AHRS期望比力向上（水平时Acc=(0,0,-g)），Plus取Acc为+g的面*/
-                    const uint8_t Plus[3]  = {3,5,1};   //FACE4/6/2
-                    const uint8_t Minus[3] = {2,4,0};   //FACE3/5/1
+                    const uint8_t Plus[3]  = {3,5,1};
+                    const uint8_t Minus[3] = {2,4,0};
 
                     bool Valid = true;
 
                     for(uint8_t i = 0;i < 3;i ++)
                     {
-                        float P = Acc_Sum[Plus[i]][i]/FACE_SAMPLES;
-                        float M = Acc_Sum[Minus[i]][i]/FACE_SAMPLES;
+                        float P = Acc_Sum[Plus[i]][i]/ACC_SAMPLES;
+                        float M = Acc_Sum[Minus[i]][i]/ACC_SAMPLES;
 
                         Acc_Bias[i] = (P + M)*0.5f;
                         Acc_Scal[i] = (P - M)/(2.0f*GRAVITY);
-                        Gyr_Bias[i] = Gyr_Sum[i]/GYRO_SAMPLES;
+                        Gyr_Bias[i] = Gyr_Sum[i]/GYR_SAMPLES;
 
                         if(Acc_Scal[i] < 0.0f) Valid = false;
                     }
 
                     if(Valid == false)
                     {
-                        IMU_Valid = false;
+                        IMU_CalValid = false;
+
                         printf("CAL,IMU,SCALE,%.2f,%.2f,%.2f\r\n",Acc_Scal[0],Acc_Scal[1],Acc_Scal[2]);
-                        printf("CAL,IMU,ERROR,7\r\n");
+                        printf("CAL,IMU,ERROR\r\n");
+
                         State = IDLE;
                         break;
                     }
 
-                    IMU_Valid = true;
+                    IMU_CalValid = true;
                     printf("CAL,IMU,DONE\r\n");
+
                     State = IDLE;
                 }
             }
             break;
 
+        case IDLE:
+            break;
+        case WAIT:
+            break;
         default:
             break;
     }
@@ -216,30 +211,33 @@ static void Cal_IMU(void)
 ****************/
 static void Cal_MAG(void)
 {
-    static float    Min[3];
-    static float    Max[3];
-    
+    static float Min[3];
+    static float Max[3];
+
     static uint16_t Count = 0;
     static uint8_t  Divider = 0;
 
     switch(State)
     {
-        case IDLE:
-            break;
-
         case REQUEST:
-            State   = COLLECT;
             Count   = 0;
             Divider = 0;
+            State   = COLLECT;
 
             printf("CAL,MAG,COLLECT\r\n");
             break;
 
         case COLLECT:
-            Divider ++;
-            if(Divider < 10) break;
+            //采样频率降低为执行频率1/10
+            if((++ Divider) < 10)
+            {
+                break;
+            }
+            else
+            {
+                Divider = 0;
+            }
 
-            Divider = 0;
             if(Count == 0)
             {
                 for(uint8_t i = 0;i < 3;i ++)
@@ -256,17 +254,16 @@ static void Cal_MAG(void)
                     if(HW_Sample.Mag[i] > Max[i]) Max[i] = HW_Sample.Mag[i];
                 }
             }
-
             Count ++;
-            if(Count >= MAG_SAMPLES) State = SOLVE;
-            break;
 
-        case SOLVE:
-            if(Max[0] - Min[0] < MAG_MIN_RANGE ||
-               Max[1] - Min[1] < MAG_MIN_RANGE ||
-               Max[2] - Min[2] < MAG_MIN_RANGE)
+            if(Count < MAG_SAMPLES) break;
+
+            if(Max[0] - Min[0] < RANGE_MAG_MIN ||
+               Max[1] - Min[1] < RANGE_MAG_MIN ||
+               Max[2] - Min[2] < RANGE_MAG_MIN)
             {
-                printf("CAL,MAG,ERROR,6\r\n");
+                MAG_CalValid = false;
+                printf("CAL,MAG,ERROR\r\n");
             }
             else
             {
@@ -275,13 +272,15 @@ static void Cal_MAG(void)
                     Mag_Bias[i] = (Max[i] + Min[i])*0.5f;
                 }
 
-                MAG_Valid = true;
+                MAG_CalValid = true;
                 printf("CAL,MAG,DONE\r\n");
             }
 
             State = IDLE;
             break;
 
+        case IDLE:
+            break;
         default:
             break;
     }

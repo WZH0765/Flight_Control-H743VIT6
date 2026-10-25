@@ -37,12 +37,12 @@ void AHRS_Ctrl(void)
         Gyr[i] = HW_Sample.Gyr[i];
         Mag[i] = HW_Sample.Mag[i];
 
-        if(IMU_Valid == true)
+        if(IMU_CalValid == true)
         {
             Acc[i] = (Acc[i] - Acc_Bias[i])/Acc_Scal[i];
             Gyr[i] =  Gyr[i] - Gyr_Bias[i];
         }
-        if(MAG_Valid == true)
+        if(MAG_CalValid == true)
         {
             Mag[i] = Mag[i] - Mag_Bias[i];
         }

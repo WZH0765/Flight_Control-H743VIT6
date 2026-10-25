@@ -56,7 +56,6 @@ file(GLOB USER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/User/Calib/*.c"
     "${CMAKE_SOURCE_DIR}/User/Driver/*.c"
     "${CMAKE_SOURCE_DIR}/User/Health/*.c"
-    "${CMAKE_SOURCE_DIR}/User/Attitude/*.c"
     "${CMAKE_SOURCE_DIR}/User/Scheduler/*.c"
     "${CMAKE_SOURCE_DIR}/User/Protocol/*.c"
 )
@@ -75,7 +74,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/User/Calib
     ${CMAKE_SOURCE_DIR}/User/Driver
     ${CMAKE_SOURCE_DIR}/User/Health
-    ${CMAKE_SOURCE_DIR}/User/Attitude
     ${CMAKE_SOURCE_DIR}/User/Scheduler
     ${CMAKE_SOURCE_DIR}/User/Protocol
 )

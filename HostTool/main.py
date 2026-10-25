@@ -85,7 +85,7 @@ class FaceIcon(QWidget):
         self.state = state
         self.update()
 
-    def _paint_flat(self, painter, scale, ox, oy, c_line):
+    def _paint_board(self, painter, scale, ox, oy, c_line):
         def P(x, y):
             return QPointF(ox + x*scale, oy + y*scale)
 
@@ -102,32 +102,10 @@ class FaceIcon(QWidget):
 
         painter.drawPolygon(QPolygonF([P(75, 20), P(205, 20), P(205, 150), P(75, 150)]))
 
-        if self.face == 1:
+        if self.face in (1, 4):
             painter.drawPolygon(QPolygonF([P(140, 42), P(105, 125), P(140, 108), P(175, 125)]))
         else:
             painter.drawPolygon(QPolygonF([P(115, 60), P(165, 60), P(165, 110), P(115, 110)]))
-
-    def _paint_vertical(self, painter, scale, ox, oy, c_line):
-        def P(x, y):
-            return QPointF(ox + x*scale, oy + y*scale)
-
-        pen = QPen(QColor(140, 150, 165, 110))
-        pen.setWidthF(max(1.0, 1.2*scale))
-        pen.setStyle(Qt.DashLine)
-        painter.setPen(pen)
-        painter.drawLine(P(30, 168), P(230, 168))
-
-        pen = QPen(c_line)
-        pen.setWidthF(max(1.2, 1.6*scale))
-        painter.setPen(pen)
-        painter.setBrush(Qt.NoBrush)
-
-        painter.drawPolygon(QPolygonF([P(75, 20), P(205, 20), P(205, 150), P(75, 150)]))
-
-        if self.face == 3:
-            painter.drawPolygon(QPolygonF([P(115, 60), P(165, 60), P(165, 110), P(115, 110)]))
-        else:
-            painter.drawPolygon(QPolygonF([P(140, 42), P(105, 125), P(140, 108), P(175, 125)]))
 
     def _paint_edge(self, painter, scale, ox, oy, c_line):
         def P(x, y):
@@ -164,10 +142,8 @@ class FaceIcon(QWidget):
         else:
             c_line = QColor("#8C96A5")
 
-        if self.face in (1, 2):
-            self._paint_flat(painter, scale, ox, oy, c_line)
-        elif self.face in (3, 4):
-            self._paint_vertical(painter, scale, ox, oy, c_line)
+        if self.face in (1, 2, 3, 4):
+            self._paint_board(painter, scale, ox, oy, c_line)
         else:
             self._paint_edge(painter, scale, ox, oy, c_line)
 
@@ -581,12 +557,7 @@ class MainWindow(QMainWindow):
         elif state == "ERROR":
             self._set_busy(progress_bar, False)
             progress_bar.setValue(0)
-            if sensor == "mag" and detail == "6":
-                self._append_cal_log("[ERROR] MAG 采样范围不足，请各方向翻转后重试")
-            elif sensor == "imu" and detail == "7":
-                self._append_cal_log("[ERROR] IMU 轴向反了（或 FACE3~6 放反），检查 Hardware/Plus/Minus")
-            else:
-                self._append_cal_log(f"[ERROR] {name} 校准失败，代码 {detail or '?'}")
+            self._append_cal_log(f"[ERROR] {name} 校准失败")
             if sensor == "imu":
                 self._imu_button("Start", True)
                 self._reset_faces()
