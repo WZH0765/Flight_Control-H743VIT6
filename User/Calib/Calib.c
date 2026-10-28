@@ -1,4 +1,5 @@
 #include "Calib.h"
+#include "Flash.h"
 #include <stdio.h>
 #include <string.h>
 #include "SysTime.h"
@@ -162,6 +163,7 @@ static void Cal_IMU(void)
                     const uint8_t Plus[3]  = {3,5,1};
                     const uint8_t Minus[3] = {2,4,0};
 
+                    bool Saved = true;
                     bool Valid = true;
 
                     for(uint8_t i = 0;i < 3;i ++)
@@ -188,7 +190,13 @@ static void Cal_IMU(void)
                     }
 
                     IMU_CalValid = true;
+                    Saved = Flash_Save();
                     printf("CAL,IMU,DONE\r\n");
+
+                    if(Saved == false)
+                    {
+                        printf("CAL,IMU,SAVE,ERROR\r\n");
+                    }
 
                     State = IDLE;
                 }
@@ -267,13 +275,20 @@ static void Cal_MAG(void)
             }
             else
             {
+                bool Saved = true;
                 for(uint8_t i = 0;i < 3;i ++)
                 {
                     Mag_Bias[i] = (Max[i] + Min[i])*0.5f;
                 }
 
                 MAG_CalValid = true;
+                Saved = Flash_Save();
                 printf("CAL,MAG,DONE\r\n");
+
+                if(Saved == false)
+                {
+                    printf("CAL,MAG,SAVE,ERROR\r\n");
+                }
             }
 
             State = IDLE;

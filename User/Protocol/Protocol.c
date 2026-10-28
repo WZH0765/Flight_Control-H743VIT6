@@ -57,6 +57,13 @@ void Prot_Process(char *Cmd)
 
     if(strcmp(Name,"CAL") != 0) return;
 
+/*校准参数加载查询*/
+    if(strcmp(Arg1,"STATUS") == 0)
+    {
+        printf("CAL,STATUS,IMU=%d,MAG=%d\r\n",IMU_CalValid ? 1 : 0,MAG_CalValid ? 1 : 0);
+        return;
+    }
+
 /*校准外设选择*/
     if(strcmp(Arg1,"IMU") == 0) Sensor = IMU;
     else if(strcmp(Arg1,"MAG") == 0) Sensor = MAG;

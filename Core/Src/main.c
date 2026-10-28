@@ -15,6 +15,7 @@
 
 #include "Task.h"
 #include "AHRS.h"
+#include "Flash.h"
 #include <stdio.h>
 #include "Health.h"
 #include "SysTime.h"
@@ -70,7 +71,6 @@ int main(void)
 
 /*******USB初始化*******/
   MX_USB_DEVICE_Init();
-  printf("USB Connection...\r\n");
   HAL_Delay(3000);
 
   MX_GPIO_Init();
@@ -94,6 +94,7 @@ int main(void)
 
   Scheduler_Init();
   Hardware_Init();
+  Flash_Load();
   Task_Init();
 
   while(1)

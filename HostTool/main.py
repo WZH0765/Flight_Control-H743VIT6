@@ -1,10 +1,10 @@
 import sys
-import os
+import os   
 from collections import deque
 
 import serial.tools.list_ports
 import pyqtgraph as pg
-from PyQt5.QtCore import Qt, QTimer, QSettings, QPointF
+from PyQt5.QtCore import Qt, QTimer, QSettings, QPointF, QEvent
 from PyQt5.QtGui import QIcon, QPainter, QColor, QPen, QPolygonF
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QMessageBox,
@@ -34,21 +34,21 @@ PROTOCOL_FIELDS = 12
 
 # IMU 六面提示（物理朝向）
 FACE_TEXT = {
-    1: "+Z 朝下（箭头面/背面朝上，平放）",
-    2: "-Z 朝下（元件面/正面朝上，倒扣）",
-    3: "+X 朝下（箭头/机头侧朝下）",
-    4: "-X 朝下（机尾侧朝下）",
-    5: "+Y 朝下（右侧朝下）",
-    6: "-Y 朝下（左侧朝下）",
+    1: "+Z 朝下（箭头面朝上,平放）",
+    2: "-Z 朝下（箭头面朝下,倒扣）",
+    3: "+X 朝下（箭头面朝前,铅垂）",
+    4: "-X 朝下（箭头面朝后,铅垂）",
+    5: "+Y 朝下（箭头面朝右,铅垂）",
+    6: "-Y 朝下（箭头面朝左,铅垂）",
 }
 
 FACE_SHORT = {
     1: "+Z 箭头面朝上",
-    2: "-Z 元件面朝上",
-    3: "+X 机头朝下",
-    4: "-X 机尾朝下",
-    5: "+Y 右侧朝下",
-    6: "-Y 左侧朝下",
+    2: "-Z 箭头面朝下",
+    3: "+X 箭头面朝前",
+    4: "-X 箭头面朝后",
+    5: "+Y 箭头面朝右",
+    6: "-Y 箭头面朝左",
 }
 
 FACE_COLOR = "#4FC3F7"
@@ -85,7 +85,7 @@ class FaceIcon(QWidget):
         self.state = state
         self.update()
 
-    def _paint_board(self, painter, scale, ox, oy, c_line):
+    def _draw_base(self, painter, scale, ox, oy, c_line):
         def P(x, y):
             return QPointF(ox + x*scale, oy + y*scale)
 
@@ -99,6 +99,11 @@ class FaceIcon(QWidget):
         pen.setWidthF(max(1.2, 1.6*scale))
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
+
+        return P
+
+    def _paint_board(self, painter, scale, ox, oy, c_line):
+        P = self._draw_base(painter, scale, ox, oy, c_line)
 
         painter.drawPolygon(QPolygonF([P(75, 20), P(205, 20), P(205, 150), P(75, 150)]))
 
@@ -108,19 +113,7 @@ class FaceIcon(QWidget):
             painter.drawPolygon(QPolygonF([P(115, 60), P(165, 60), P(165, 110), P(115, 110)]))
 
     def _paint_edge(self, painter, scale, ox, oy, c_line):
-        def P(x, y):
-            return QPointF(ox + x*scale, oy + y*scale)
-
-        pen = QPen(QColor(140, 150, 165, 110))
-        pen.setWidthF(max(1.0, 1.2*scale))
-        pen.setStyle(Qt.DashLine)
-        painter.setPen(pen)
-        painter.drawLine(P(30, 168), P(230, 168))
-
-        pen = QPen(c_line)
-        pen.setWidthF(max(1.2, 1.6*scale))
-        painter.setPen(pen)
-        painter.setBrush(Qt.NoBrush)
+        P = self._draw_base(painter, scale, ox, oy, c_line)
 
         painter.drawPolygon(QPolygonF([P(125, 20), P(145, 20), P(145, 150), P(125, 150)]))
 
@@ -248,11 +241,30 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.plot)
 
+        # 提示信息：绘图区右上角悬浮
+        self.hint_label = QLabel("", self.plot_frame)
+        self.plot_frame.installEventFilter(self)
+
     def _build_attitude_indicator(self):
         self.ahi = AttitudeIndicator()
         layout = QVBoxLayout(self.attitude_frame)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.ahi)
+
+    # ============================================================ 提示信息
+    def _show_hint(self, text):
+        self.hint_label.setText(text)
+        self._place_hint()
+
+    def _place_hint(self):
+        self.hint_label.adjustSize()
+        self.hint_label.move(self.plot_frame.width() - self.hint_label.width() - 8, 8)
+        self.hint_label.raise_()
+
+    def eventFilter(self, obj, event):
+        if obj is self.plot_frame and event.type() == QEvent.Resize:
+            self._place_hint()
+        return super().eventFilter(obj, event)
 
     def _bind_signals(self):
         self.theme_button.clicked.connect(self.toggle_theme)
@@ -394,8 +406,8 @@ class MainWindow(QMainWindow):
             self._set_busy(pb, False)
             pb.setValue(0)
 
-        self._append_cal_log("[INFO] IMU / MAG 校准就绪（气压计无需校准）")
-        self._append_cal_log("[INFO] IMU：先放好 FACE1 再点 Start，之后每面放好点 NEXT")
+        self._append_cal_log("[INFO] IMU / MAG 校准就绪")
+        self._append_cal_log("[INFO] IMU:先放好 FACE1 再点 Start,之后每面放好点 NEXT")
 
     def _cal_progress(self, sensor: str):
         return self.progressBar_accgyr if sensor == "imu" else self.progressBar_mag
@@ -434,17 +446,21 @@ class MainWindow(QMainWindow):
         self.start_accgyr.setText(text)
         self.start_accgyr.setEnabled(enabled)
 
-    def _send_cal_cmd(self, sensor: str):
+    def _send_cmd(self, cmd: str):
         if self.serial_thread is None or self.serial_thread.ser is None:
             self.show_warning("提示", "请先连接串口")
-            return
+            return False
 
         try:
-            cmd = f"cal,{sensor},start\n"
             self.serial_thread.ser.write(cmd.encode())
             self._append_cal_log(f"[TX] {cmd.strip()}")
+            return True
         except Exception as e:
             self.show_warning("发送失败", str(e))
+            return False
+
+    def _send_cal_cmd(self, sensor: str):
+        if not self._send_cmd(f"cal,{sensor},start\n"):
             return
 
         progress_bar = self._cal_progress(sensor)
@@ -456,28 +472,13 @@ class MainWindow(QMainWindow):
             self._reset_faces()
 
     def _send_cal_next(self):
-        if self.serial_thread is None or self.serial_thread.ser is None:
-            self.show_warning("提示", "请先连接串口")
-            return
-
-        try:
-            cmd = "cal,imu,next\n"
-            self.serial_thread.ser.write(cmd.encode())
-            self._append_cal_log(f"[TX] {cmd.strip()}")
-        except Exception as e:
-            self.show_warning("发送失败", str(e))
+        if not self._send_cmd("cal,imu,next\n"):
             return
 
         self._imu_button("Start", False)
 
     def _abort_cal(self, sensor: str):
-        if self.serial_thread is not None and self.serial_thread.ser is not None:
-            try:
-                cmd = f"cal,{sensor},abort\n"
-                self.serial_thread.ser.write(cmd.encode())
-                self._append_cal_log(f"[TX] {cmd.strip()}")
-            except Exception as e:
-                self.show_warning("发送失败", str(e))
+        self._send_cmd(f"cal,{sensor},abort\n")
 
         progress_bar = self._cal_progress(sensor)
         self._set_busy(progress_bar, False)
@@ -545,6 +546,14 @@ class MainWindow(QMainWindow):
 
         elif state == "SCALE":
             self._append_cal_log(f"[INFO] Acc_Scal = {detail}")
+
+        elif state == "SAVE":
+            self._set_busy(progress_bar, False)
+            progress_bar.setValue(0)
+            self._append_cal_log(f"[WARN] {name} 校准完成，但 Flash 保存失败，已标记未校准")
+            if sensor == "imu":
+                self._imu_button("Start", True)
+                self._reset_faces()
 
         elif state == "DONE":
             self._set_busy(progress_bar, False)
@@ -654,55 +663,35 @@ class MainWindow(QMainWindow):
         ]
         
         if theme_name == "dark":
-            # 深色模式：深色底 + 浅色字
-            btn_style = f"""
-                QPushButton {{
-                    color: {t['label_color']};
-                    background-color: #1a2332;
-                    border: 1px solid #2a3a4a;
-                    border-radius: 4px;
-                }}
-                QPushButton:hover {{ background-color: #2a3a4a; }}
-                QPushButton:pressed {{ background-color: #0f1419; }}
-            """
-            combo_style = f"""
-                QComboBox {{
-                    color: {t['label_color']};
-                    background-color: #1a2332;
-                    border: 1px solid #2a3a4a;
-                    border-radius: 4px;
-                    padding-left: 5px;
-                }}
-                QComboBox QAbstractItemView {{
-                    background-color: #1a2332;
-                    color: {t['label_color']};
-                }}
-            """
+            btn_bg, btn_border = "#1a2332", "#2a3a4a"
+            btn_hover, btn_pressed = "#2a3a4a", "#0f1419"
         else:
-            # 浅色模式：白底 + 深色字 + 细边框
-            btn_style = f"""
-                QPushButton {{
-                    color: {t['label_color']};
-                    background-color: #ffffff;
-                    border: 1px solid #d0d7de;
-                    border-radius: 4px;
-                }}
-                QPushButton:hover {{ background-color: #f4f6f8; }}
-                QPushButton:pressed {{ background-color: #e1e4e8; }}
-            """
-            combo_style = f"""
-                QComboBox {{
-                    color: {t['label_color']};
-                    background-color: #ffffff;
-                    border: 1px solid #d0d7de;
-                    border-radius: 4px;
-                    padding-left: 5px;
-                }}
-                QComboBox QAbstractItemView {{
-                    background-color: #ffffff;
-                    color: {t['label_color']};
-                }}
-            """
+            btn_bg, btn_border = "#ffffff", "#d0d7de"
+            btn_hover, btn_pressed = "#f4f6f8", "#e1e4e8"
+
+        btn_style = f"""
+            QPushButton {{
+                color: {t['label_color']};
+                background-color: {btn_bg};
+                border: 1px solid {btn_border};
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{ background-color: {btn_hover}; }}
+            QPushButton:pressed {{ background-color: {btn_pressed}; }}
+        """
+        combo_style = f"""
+            QComboBox {{
+                color: {t['label_color']};
+                background-color: {btn_bg};
+                border: 1px solid {btn_border};
+                border-radius: 4px;
+                padding-left: 5px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {btn_bg};
+                color: {t['label_color']};
+            }}
+        """
 
         # 应用样式
         for btn in normal_btns:
@@ -782,6 +771,8 @@ class MainWindow(QMainWindow):
         self.link_button.setText("CONNECT")
         self.link_status.setText("NOT CONNECTED")
 
+        self._show_hint("")
+
         for pb in (self.progressBar_accgyr, self.progressBar_mag):
             self._set_busy(pb, False)
             pb.setValue(0)
@@ -793,6 +784,12 @@ class MainWindow(QMainWindow):
             self.link_button.setText("DISCONNECT")
             self.link_status.setText("CONNECTED")
             self.refresh_timer.start()
+
+            self._show_hint("校准参数：查询中…")
+            try:
+                self.serial_thread.ser.write(b"cal,status\n")
+            except Exception:
+                pass
         else:
             self.serial_thread = None
             self.link_button.setText("CONNECT")
@@ -822,6 +819,9 @@ class MainWindow(QMainWindow):
 
     def on_data(self, line: str):
         upper = line.upper()
+        if upper.startswith("CAL,STATUS,"):
+            self._handle_cal_status(line)
+            return
         if upper.startswith("CAL,"):
             self._handle_cal_line(line)
             return
@@ -834,6 +834,26 @@ class MainWindow(QMainWindow):
         self.yaw_data.append(data["yaw"])
         self.roll_data.append(data["roll"])
         self.pitch_data.append(data["pitch"])
+
+    def _handle_cal_status(self, line: str):
+        parts = line.split(",")
+        imu = mag = False
+
+        for item in parts[2:]:
+            item = item.strip().upper()
+            if item.startswith("IMU="):
+                imu = item[4:] == "1"
+            elif item.startswith("MAG="):
+                mag = item[4:] == "1"
+
+        if imu and mag:
+            text = "校准参数：已加载"
+        elif imu or mag:
+            text = "校准参数：部分加载"
+        else:
+            text = "校准参数：未校准"
+
+        self._show_hint(text)
 
     # ============================================================ 刷新 UI
     def refresh_ui(self):
@@ -848,12 +868,10 @@ class MainWindow(QMainWindow):
         self.pitch_value.setText(f"{self.latest['pitch']:.1f}°")
 
     def _update_health(self):
-        def color(ok: int) -> str:
-            return "color: green; font-weight: bold;" if ok else "color: red; font-weight: bold;"
-        self.gyr_status.setStyleSheet(color(self.latest["gyr"]))
-        self.acc_status.setStyleSheet(color(self.latest["acc"]))
-        self.mag_status.setStyleSheet(color(self.latest["mag"]))
-        self.bar_status.setStyleSheet(color(self.latest["bar"]))
+        for key, widget in (("gyr", self.gyr_status), ("acc", self.acc_status),
+                            ("mag", self.mag_status), ("bar", self.bar_status)):
+            color = "green" if self.latest[key] else "red"
+            widget.setStyleSheet(f"color: {color}; font-weight: bold;")
 
     def _update_curves(self):
         self.curve_yaw.setData(list(self.yaw_data))
