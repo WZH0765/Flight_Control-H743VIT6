@@ -81,7 +81,7 @@ void Prot_Process(char *Cmd)
 *  说  明：从环形缓冲取字节
 ****************/
 
-void Prot_Receive(void)
+void Prot_Run(void)
 {
     uint8_t Byte = 0;
     static uint8_t Cmd_Index = 0;

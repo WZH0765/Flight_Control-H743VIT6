@@ -1,9 +1,11 @@
 #include "SPI.h"
 #include "I2C.h"
 #include "DPS310.h"
+#include "AT7456E.h"
 #include "IST8310.h"
 #include "ICM42605.h"
 #include "QMC5883P.h"
+#include "Receiver.h"
 
 /*************** 传感器数据与健康状态 ***************/
 health_t ACC_Health;
@@ -77,6 +79,19 @@ bar_t DPS310_Device =
     .BusDevice = &DPS310_Bus
 };
 
+//OSD
+bus_t AT7456E_Bus =
+{
+    .Type = BUS_TYPE_SPI,
+    .hspi = &hspi2,
+    .CsPort = GPIOB,
+    .CsPin = GPIO_PIN_12
+};
+osd_t AT7456E_Device =
+{
+    .BusDevice = &AT7456E_Bus
+};
+
 /***************
 *  硬件初始化：
 *
@@ -116,11 +131,22 @@ void Hardware_Init(void)
     }
 #endif
 
+#ifdef USE_AT7456E
+    if(AT7456E_Detect(&AT7456E_Device) == true)
+    {
+        AT7456E_Init(&AT7456E_Device);
+    }
+#endif
+
 #ifdef USE_DPS310
     if(DPS310_Detect(&DPS310_Device) == true)
     {
         DPS310_Init(&DPS310_Device);
     }
+#endif
+
+#ifdef USE_RECEIVER
+    Start_Receive();
 #endif
 }
 

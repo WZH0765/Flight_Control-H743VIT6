@@ -4,5 +4,5 @@
 
 #include <stdint.h>
 
-void Prot_Receive(void);
+void Prot_Run(void);
 void Prot_WriteBuf(uint8_t Data);

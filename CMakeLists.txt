@@ -58,6 +58,7 @@ file(GLOB USER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/User/Health/*.c"
     "${CMAKE_SOURCE_DIR}/User/Scheduler/*.c"
     "${CMAKE_SOURCE_DIR}/User/Protocol/*.c"
+    "${CMAKE_SOURCE_DIR}/User/Receiver/*.c"
 )
 
 # Add sources to executable
@@ -76,6 +77,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/User/Health
     ${CMAKE_SOURCE_DIR}/User/Scheduler
     ${CMAKE_SOURCE_DIR}/User/Protocol
+    ${CMAKE_SOURCE_DIR}/User/Receiver
 )
 
 # Add project symbols (macros)

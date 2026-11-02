@@ -22,6 +22,7 @@
 #include "stm32h7xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "usart.h"			//USART6_IRQHandler 需要 huart6
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,6 +57,9 @@
 
 /* External variables --------------------------------------------------------*/
 extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
+extern DMA_HandleTypeDef hdma_usart6_rx;
+extern DMA_HandleTypeDef hdma_usart6_tx;
+extern UART_HandleTypeDef huart6;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -199,6 +203,48 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /**
+  * @brief This function handles DMA1 stream0 global interrupt.
+  */
+void DMA1_Stream0_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream0_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream0_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart6_rx);
+  /* USER CODE BEGIN DMA1_Stream0_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream0_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 stream1 global interrupt.
+  */
+void DMA1_Stream1_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream1_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream1_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart6_tx);
+  /* USER CODE BEGIN DMA1_Stream1_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USART6 global interrupt.
+  */
+void USART6_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART6_IRQn 0 */
+
+  /* USER CODE END USART6_IRQn 0 */
+  HAL_UART_IRQHandler(&huart6);
+  /* USER CODE BEGIN USART6_IRQn 1 */
+
+  /* USER CODE END USART6_IRQn 1 */
+}
+
+/**
   * @brief This function handles USB OTG FS global interrupt.
   */
 void OTG_FS_IRQHandler(void)
@@ -213,5 +259,8 @@ void OTG_FS_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+
+/* ELRS/CRSF 接收机中断（USART6 + DMA1_Stream0）由 CubeMX 生成，见上方
+   USART6_IRQHandler / DMA1_Stream0_IRQHandler */
 
 /* USER CODE END 1 */

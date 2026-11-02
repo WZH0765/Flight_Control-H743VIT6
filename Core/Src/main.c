@@ -3,6 +3,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "i2c.h"
 #include "sdmmc.h"
 #include "spi.h"
@@ -19,6 +20,7 @@
 #include <stdio.h>
 #include "Health.h"
 #include "SysTime.h"
+#include "Receiver.h"
 #include "Hardware.h"
 #include "Scheduler.h"
 #include "usbd_cdc_if.h"
@@ -74,7 +76,8 @@ int main(void)
   HAL_Delay(3000);
 
   MX_GPIO_Init();
-  
+
+  MX_DMA_Init();
   MX_I2C1_Init();
   MX_I2C2_Init();
 
@@ -228,6 +231,23 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart,uint16_t Size)
+{
+	if(huart->Instance == USART6)
+	{
+		Receive_Parse(RC_RxBuffer,Size,&RC_Data);
+		Start_Receive();
+	}
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+	if(huart->Instance == USART6)
+	{
+		Start_Receive();
+	}
+}
 
 /* USER CODE END 4 */
 

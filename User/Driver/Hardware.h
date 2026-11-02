@@ -13,8 +13,10 @@
 * 请使用较低（如：100kHz）总线速度
 *******************************/
 
+#define USE_RECEIVER
 #define USE_ICM42605
 #define USE_QMC5883P
+#define USE_AT7456E
 #define USE_DPS310
 
 /****************** 板级量程换算 ******************/
@@ -73,8 +75,15 @@ typedef struct
     uint8_t ID;
 } bar_t;
 
+typedef struct
+{
+    bus_t *BusDevice;
+
+} osd_t;
+
 extern bar_t DPS310_Device;
 extern mag_t IST8310_Device;
+extern osd_t AT7456E_Device;
 extern mag_t QMC5883P_Device;
 extern imu_t ICM42605_Device1;
 extern imu_t ICM42605_Device2;
