@@ -236,8 +236,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart,uint16_t Size)
 {
 	if(huart->Instance == USART6)
 	{
-		Receive_Parse(RC_RxBuffer,Size,&RC_Data);
-		Start_Receive();
+		Receiver_Parse(RC_RxBuffer,Size,&RC_Data);
+		Receiver_Start();
 	}
 }
 
@@ -245,7 +245,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
 	if(huart->Instance == USART6)
 	{
-		Start_Receive();
+		Receiver_Start();
 	}
 }
 

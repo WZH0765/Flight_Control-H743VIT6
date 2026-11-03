@@ -101,6 +101,6 @@ typedef struct
 extern rc_data_t RC_Data;
 extern uint8_t RC_RxBuffer[RC_BUFFER_SIZE];
 
-bool Link_Status(void);
-void Start_Receive(void);
-void Receive_Parse(uint8_t *Input,uint16_t size,rc_data_t *Output);
+void Receiver_Start(void);
+bool Receiver_Status(void);
+void Receiver_Parse(uint8_t *Input,uint16_t size,rc_data_t *Output);

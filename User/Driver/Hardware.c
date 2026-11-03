@@ -146,7 +146,7 @@ void Hardware_Init(void)
 #endif
 
 #ifdef USE_RECEIVER
-    Start_Receive();
+    Receiver_Start();
 #endif
 }
 

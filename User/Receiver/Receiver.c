@@ -90,13 +90,13 @@ rc_data_t RC_Data;
 uint32_t  LastFrame_Time;
 uint8_t   RC_RxBuffer[RC_BUFFER_SIZE];
 
-void Start_Receive(void)
+void Receiver_Start(void)
 {
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart6,RC_RxBuffer,sizeof(RC_RxBuffer));
 	__HAL_DMA_DISABLE_IT(huart6.hdmarx,DMA_IT_HT);
 }
 
-void Receive_Parse(uint8_t *Input,uint16_t size,rc_data_t *Output)
+void Receiver_Parse(uint8_t *Input,uint16_t size,rc_data_t *Output)
 {
 	if(Input[1] < 2 || size < Input[1] + 2)return;
 	if(size < 4 || Input[0] != CRSF_ADDRESS_FLIGHT_CONTROLLER)return;
@@ -179,7 +179,7 @@ void Receive_Parse(uint8_t *Input,uint16_t size,rc_data_t *Output)
 	}
 }
 
-bool Link_Status(void)
+bool Receiver_Status(void)
 {
 	return LastFrame_Time != 0 && (millis() - LastFrame_Time) < RC_LINK_TIMEOUT;
 }

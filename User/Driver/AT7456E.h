@@ -43,9 +43,6 @@ void AT7456E_WriteChar(osd_t *Device,uint8_t Row,uint8_t Col,uint8_t Ch);
 #define AT7456E_VM0_OSD_ON                      (1 << 3)
 #define AT7456E_VM0_RESET                       (1 << 1)
 
-/*********************** AT7456E STAT Setting *******************************/
-#define AT7456E_STAT_VRST                       (1 << 6)
-
 /*********************** AT7456E Define *******************************/
 #define AT7456E_COLS_MEM                        30
 #define AT7456E_ROWS_MEM                        16
