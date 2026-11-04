@@ -1,20 +1,20 @@
 #include "tim.h"
 #include "Motor.h"
 #include <string.h>
-#include "stm32h7xx_hal.h"
 
 __attribute__((section(".dma_buffer")))
-uint16_t Motor_Buffer[4][MOTOR_BUF_LEN];
+uint32_t Motor_Buffer[2][MOTOR_BUF_LEN * 4];
 
 void Motor_Init(void)
 {
     memset(Motor_Buffer,0,sizeof(Motor_Buffer));
 
     Motor_Stop();
-    HAL_DMA_Start(&hdma_tim3_up ,(uint32_t)Motor_Buffer[0],(uint32_t)&TIM3->CCR3,MOTOR_BUF_LEN);
-    HAL_DMA_Start(&hdma_tim3_ch4,(uint32_t)Motor_Buffer[1],(uint32_t)&TIM3->CCR4,MOTOR_BUF_LEN);
-    HAL_DMA_Start(&hdma_tim2_up ,(uint32_t)Motor_Buffer[2],(uint32_t)&TIM2->CCR1,MOTOR_BUF_LEN);
-    HAL_DMA_Start(&hdma_tim2_ch2,(uint32_t)Motor_Buffer[3],(uint32_t)&TIM2->CCR2,MOTOR_BUF_LEN);
+    TIM2->DCR = (3 << 8) | (0x34 >> 2);
+    TIM3->DCR = (3 << 8) | (0x34 >> 2);
+
+    HAL_DMA_Start(&hdma_tim3_up,(uint32_t)Motor_Buffer[0],(uint32_t)&TIM3->DMAR,MOTOR_BUF_LEN * 4);
+    HAL_DMA_Start(&hdma_tim2_up,(uint32_t)Motor_Buffer[1],(uint32_t)&TIM2->DMAR,MOTOR_BUF_LEN * 4);
 
     __HAL_TIM_ENABLE_DMA(&htim2,TIM_DMA_UPDATE);
     __HAL_TIM_ENABLE_DMA(&htim3,TIM_DMA_UPDATE);
@@ -36,17 +36,19 @@ void Motor_Set(uint8_t Index,uint16_t Throttle)
     uint16_t Check = 0;
     uint16_t Frame = 0;
     uint16_t Packet = 0;
+    uint8_t  Timer = Index >> 1;
+    uint8_t  Slot  = (uint8_t)((Index & 1) + (Timer == 0 ? 2 : 0));
 
     if(Throttle >= 1000)   DShot = MOTOR_MAX;
     else if(Throttle > 0)  DShot = MOTOR_MIN + (uint16_t)((uint32_t)Throttle*(MOTOR_MAX - MOTOR_MIN)/1000);
 
     Packet = (uint16_t)(DShot << 1);
-    Frame  = (uint16_t)((Packet << 4) | Check);
     Check  = (Packet ^ (Packet >> 4) ^ (Packet >> 8)) & 0x0F;
+    Frame  = (uint16_t)((Packet << 4) | Check);
 
     for(uint8_t i = 0;i < 16;i ++)
     {
-        Motor_Buffer[Index][i] = (Frame & 0x8000) ? MOTOR_BIT1 : MOTOR_BIT0;
+        Motor_Buffer[Timer][4*i + Slot] = (Frame & 0x8000) ? MOTOR_BIT1 : MOTOR_BIT0;
         Frame <<= 1;
     }
 }

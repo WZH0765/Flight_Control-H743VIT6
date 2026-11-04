@@ -7,6 +7,7 @@
 #include "i2c.h"
 #include "sdmmc.h"
 #include "spi.h"
+#include "stm32h7xx_hal.h"
 #include "tim.h"
 #include "usart.h"
 #include "usb_device.h"
