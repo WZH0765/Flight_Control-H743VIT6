@@ -13,7 +13,6 @@
 * 请使用较低（如：100kHz）总线速度
 *******************************/
 
-#define USE_RECEIVER
 #define USE_ICM42605
 #define USE_QMC5883P
 #define USE_AT7456E

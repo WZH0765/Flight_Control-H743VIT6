@@ -53,12 +53,13 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 file(GLOB USER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/User/Bus/*.c"
     "${CMAKE_SOURCE_DIR}/User/AHRS/*.c"
+    "${CMAKE_SOURCE_DIR}/User/Motor/*.c"
     "${CMAKE_SOURCE_DIR}/User/Calib/*.c"
     "${CMAKE_SOURCE_DIR}/User/Driver/*.c"
     "${CMAKE_SOURCE_DIR}/User/Health/*.c"
-    "${CMAKE_SOURCE_DIR}/User/Scheduler/*.c"
     "${CMAKE_SOURCE_DIR}/User/Protocol/*.c"
     "${CMAKE_SOURCE_DIR}/User/Receiver/*.c"
+    "${CMAKE_SOURCE_DIR}/User/Scheduler/*.c"
 )
 
 # Add sources to executable
@@ -73,11 +74,12 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/User/Bus
     ${CMAKE_SOURCE_DIR}/User/AHRS
     ${CMAKE_SOURCE_DIR}/User/Calib
+    ${CMAKE_SOURCE_DIR}/User/Motor
     ${CMAKE_SOURCE_DIR}/User/Driver
     ${CMAKE_SOURCE_DIR}/User/Health
-    ${CMAKE_SOURCE_DIR}/User/Scheduler
     ${CMAKE_SOURCE_DIR}/User/Protocol
     ${CMAKE_SOURCE_DIR}/User/Receiver
+    ${CMAKE_SOURCE_DIR}/User/Scheduler
 )
 
 # Add project symbols (macros)

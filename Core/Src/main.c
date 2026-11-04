@@ -18,6 +18,7 @@
 #include "Task.h"
 #include "AHRS.h"
 #include "Flash.h"
+#include "Motor.h"
 #include <stdio.h>
 #include "Health.h"
 #include "SysTime.h"
@@ -98,8 +99,10 @@ int main(void)
 
   // MX_SDMMC1_SD_Init();
 
+  Receiver_Start();
   Scheduler_Init();
   Hardware_Init();
+  Motor_Init();
   Flash_Load();
   Task_Init();
 

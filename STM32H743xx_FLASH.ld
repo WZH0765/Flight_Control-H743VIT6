@@ -242,7 +242,13 @@ SECTIONS
     . = ALIGN(8);
   } >DTCMRAM
 
-
+  .dma_buffer (NOLOAD) :
+  {
+    . = ALIGN(4);
+    *(.dma_buffer)
+    *(.dma_buffer*)
+    . = ALIGN(4);
+  } >RAM_D2
 
   /* Remove information from the standard libraries */
   /DISCARD/ :

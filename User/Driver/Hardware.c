@@ -5,7 +5,6 @@
 #include "IST8310.h"
 #include "ICM42605.h"
 #include "QMC5883P.h"
-#include "Receiver.h"
 
 /*************** 传感器数据与健康状态 ***************/
 health_t ACC_Health;
@@ -143,10 +142,6 @@ void Hardware_Init(void)
     {
         DPS310_Init(&DPS310_Device);
     }
-#endif
-
-#ifdef USE_RECEIVER
-    Receiver_Start();
 #endif
 }
 
