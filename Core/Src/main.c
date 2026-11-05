@@ -104,7 +104,7 @@ int main(void)
   Scheduler_Init();
   Hardware_Init();
   Motor_Init();
-  Flash_Load();
+  // Flash_Load();
   Task_Init();
 
   while(1)
