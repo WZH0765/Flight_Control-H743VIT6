@@ -37,6 +37,14 @@ typedef struct
 
 typedef struct
 {
+    float Acc[3];           //校准后机体系加速度（m/s²）
+    float Gyr[3];           //校准后机体系角速度（rad/s）
+    float Mag[3];           //校准后机体系磁场（LSB）
+
+} body_t;
+
+typedef struct
+{
     bus_t *BusDevice;
 
     float Acc[3];
@@ -87,6 +95,7 @@ extern mag_t QMC5883P_Device;
 extern imu_t ICM42605_Device1;
 extern imu_t ICM42605_Device2;
 
+extern body_t   HW_Body;
 extern sample_t HW_Sample;
 extern health_t ACC_Health;
 extern health_t GYR_Health;

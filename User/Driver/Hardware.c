@@ -12,6 +12,7 @@ health_t GYR_Health;
 health_t MAG_Health;
 health_t BAR_Health;
 
+body_t   HW_Body   = {0};
 sample_t HW_Sample = {0};
 
 /************* 中间抽象层-用户注册硬件外设 **************/

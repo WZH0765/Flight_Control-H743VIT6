@@ -52,9 +52,10 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 file(GLOB USER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/User/Bus/*.c"
-    "${CMAKE_SOURCE_DIR}/User/AHRS/*.c"
+    "${CMAKE_SOURCE_DIR}/User/Alg/*.c"
     "${CMAKE_SOURCE_DIR}/User/Motor/*.c"
     "${CMAKE_SOURCE_DIR}/User/Calib/*.c"
+    "${CMAKE_SOURCE_DIR}/User/Flight/*.c"
     "${CMAKE_SOURCE_DIR}/User/Driver/*.c"
     "${CMAKE_SOURCE_DIR}/User/Health/*.c"
     "${CMAKE_SOURCE_DIR}/User/Protocol/*.c"
@@ -72,9 +73,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     ${CMAKE_SOURCE_DIR}/User/Bus
-    ${CMAKE_SOURCE_DIR}/User/AHRS
+    ${CMAKE_SOURCE_DIR}/User/Alg
     ${CMAKE_SOURCE_DIR}/User/Calib
     ${CMAKE_SOURCE_DIR}/User/Motor
+    ${CMAKE_SOURCE_DIR}/User/Flight
     ${CMAKE_SOURCE_DIR}/User/Driver
     ${CMAKE_SOURCE_DIR}/User/Health
     ${CMAKE_SOURCE_DIR}/User/Protocol

@@ -21,6 +21,7 @@
 #include "Flash.h"
 #include "Motor.h"
 #include <stdio.h>
+#include "Flight.h"
 #include "Health.h"
 #include "SysTime.h"
 #include "Receiver.h"
@@ -103,6 +104,7 @@ int main(void)
   Receiver_Start();
   Scheduler_Init();
   Hardware_Init();
+  Flight_Init();
   Motor_Init();
   // Flash_Load();
   Task_Init();
