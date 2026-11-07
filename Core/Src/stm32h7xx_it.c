@@ -59,8 +59,10 @@
 extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
 extern DMA_HandleTypeDef hdma_tim2_up;
 extern DMA_HandleTypeDef hdma_tim3_up;
+extern DMA_HandleTypeDef hdma_usart2_rx;
 extern DMA_HandleTypeDef hdma_usart6_rx;
 extern DMA_HandleTypeDef hdma_usart6_tx;
+extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart6;
 /* USER CODE BEGIN EV */
 
@@ -261,6 +263,34 @@ void DMA1_Stream3_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles DMA1 stream4 global interrupt.
+  */
+void DMA1_Stream4_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Stream4_IRQn 0 */
+
+  /* USER CODE END DMA1_Stream4_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart2_rx);
+  /* USER CODE BEGIN DMA1_Stream4_IRQn 1 */
+
+  /* USER CODE END DMA1_Stream4_IRQn 1 */
+}
+
+/**
+  * @brief This function handles USART2 global interrupt.
+  */
+void USART2_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART2_IRQn 0 */
+
+  /* USER CODE END USART2_IRQn 0 */
+  HAL_UART_IRQHandler(&huart2);
+  /* USER CODE BEGIN USART2_IRQn 1 */
+
+  /* USER CODE END USART2_IRQn 1 */
+}
+
+/**
   * @brief This function handles USART6 global interrupt.
   */
 void USART6_IRQHandler(void)
@@ -292,5 +322,8 @@ void OTG_FS_IRQHandler(void)
 
 /* ELRS/CRSF 接收机中断（USART6 + DMA1_Stream0）由 CubeMX 生成，见上方
    USART6_IRQHandler / DMA1_Stream0_IRQHandler */
+
+/* GPS 用 USART2 + DMA1_Stream4，中断也已由 CubeMX 生成，见上方
+   USART2_IRQHandler / DMA1_Stream4_IRQHandler */
 
 /* USER CODE END 1 */

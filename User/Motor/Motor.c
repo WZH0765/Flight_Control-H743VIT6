@@ -10,6 +10,7 @@ void Motor_Init(void)
     memset(Motor_Buffer,0,sizeof(Motor_Buffer));
 
     Motor_Stop();
+
     TIM2->DCR = (3 << 8) | (0x34 >> 2);
     TIM3->DCR = (3 << 8) | (0x34 >> 2);
 

@@ -1,5 +1,6 @@
 #include "SPI.h"
 #include "I2C.h"
+#include "GPS.h"
 #include "DPS310.h"
 #include "AT7456E.h"
 #include "IST8310.h"
@@ -143,6 +144,10 @@ void Hardware_Init(void)
     {
         DPS310_Init(&DPS310_Device);
     }
+#endif
+
+#ifdef USE_GPS
+    GPS_Start();
 #endif
 }
 

@@ -48,6 +48,8 @@ extern UART_HandleTypeDef huart6;
 
 /* USER CODE BEGIN Private defines */
 
+extern DMA_HandleTypeDef hdma_usart2_rx;    //CubeMX 没生成这行，usart.c 定义、it.c 要用
+
 /* USER CODE END Private defines */
 
 void MX_UART4_Init(void);

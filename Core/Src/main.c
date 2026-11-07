@@ -7,7 +7,6 @@
 #include "i2c.h"
 #include "sdmmc.h"
 #include "spi.h"
-#include "stm32h7xx_hal.h"
 #include "tim.h"
 #include "usart.h"
 #include "usb_device.h"
@@ -16,6 +15,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include "GPS.h"
 #include "Task.h"
 #include "AHRS.h"
 #include "Flash.h"
@@ -248,6 +248,11 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart,uint16_t Size)
 		Receiver_Parse(RC_RxBuffer,Size,&RC_Data);
 		Receiver_Start();
 	}
+	else if(huart->Instance == USART2)
+	{
+		GPS_Parse(GPS_RxBuffer,Size);
+		GPS_Start();
+	}
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
@@ -255,6 +260,10 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 	if(huart->Instance == USART6)
 	{
 		Receiver_Start();
+	}
+	else if(huart->Instance == USART2)
+	{
+		GPS_Start();
 	}
 }
 

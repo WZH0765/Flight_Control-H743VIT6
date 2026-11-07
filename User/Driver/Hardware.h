@@ -17,6 +17,7 @@
 #define USE_QMC5883P
 #define USE_AT7456E
 #define USE_DPS310
+#define USE_GPS
 
 /****************** 板级量程换算 ******************/
 
