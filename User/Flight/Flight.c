@@ -41,57 +41,31 @@ void Flight_Init(void)
 
 void Flight_Update(float Gx,float Gy,float Gz,float dt)
 {
-    float Out[3];
-    float Base;
-    float Diff[4];
-    float Scale;
-    float MaxDiff = -10000.0f,MinDiff = 10000.0f;
+    float Corr[3];
+    Corr[0] = PID_Update(&PID_YawRate  ,SetRate[0],Gz*RAD_TO_DEG,dt);
+    Corr[1] = PID_Update(&PID_RollRate ,SetRate[1],Gx*RAD_TO_DEG,dt);
+    Corr[2] = PID_Update(&PID_PitchRate,SetRate[2],Gy*RAD_TO_DEG,dt);
 
-    if(State != ARM)
+    float Mix[4];
+    float Max = -10000.0f,Min = 10000.0f;
+    for(uint8_t i = 0;i < 4;i ++)
     {
-        Motor_Stop();
-        return;
+        Mix[i] = MIX_GAIN*(Mix_Table[i][0]*Corr[0] + Mix_Table[i][1]*Corr[1] + Mix_Table[i][2]*Corr[2]);
+
+        Max = fmaxf(Max,Mix[i]);
+        Min = fminf(Min,Mix[i]);
     }
+    float Scale = fminf(1.0f,(1000.0f - MIN_THRO)/(Max - Min));
 
-    if(Health_Status(&GYR_Health) == false)
-    {
-        State = FAILSAFE;
-        Motor_Stop();
-        return;
-    }
+    Max *= Scale;
+    Min *= Scale;
 
-    Out[0] = PID_Update(&PID_YawRate  ,SetRate[0],Gz*RAD_TO_DEG,dt);
-    Out[1] = PID_Update(&PID_RollRate ,SetRate[1],Gx*RAD_TO_DEG,dt);
-    Out[2] = PID_Update(&PID_PitchRate,SetRate[2],Gy*RAD_TO_DEG,dt);
-
-    Base = IDLE_THRO + SetThro*(1000.0f - IDLE_THRO)/1000.0f;
+    float BaseThro = IDLE_THRO + SetThro*(1000.0f - IDLE_THRO)/1000.0f;
+    BaseThro = fminf(BaseThro,1000.0f - Max);
+    BaseThro = fmaxf(BaseThro,MIN_THRO - Min);
 
     for(uint8_t i = 0;i < 4;i ++)
     {
-        Diff[i] = MIX_GAIN*(Mix_Table[i][0]*Out[0] + Mix_Table[i][1]*Out[1] + Mix_Table[i][2]*Out[2]);
-
-        if(Diff[i] > MaxDiff) MaxDiff = Diff[i];
-        if(Diff[i] < MinDiff) MinDiff = Diff[i];
-    }
-
-    /*行程不够时等比压缩，再把基准油门平移进可用行程*/
-    Scale = fminf(1.0f,(1000.0f - MIN_THRO)/(MaxDiff - MinDiff));
-
-    MaxDiff *= Scale;
-    MinDiff *= Scale;
-
-    for(uint8_t i = 0;i < 4;i ++) Diff[i] *= Scale;
-
-    if(Base + MinDiff < MIN_THRO) Base = MIN_THRO - MinDiff;
-    if(Base + MaxDiff > 1000.0f)  Base = 1000.0f - MaxDiff;
-
-    for(uint8_t i = 0;i < 4;i ++)
-    {
-        float Thro = Base + Diff[i];
-
-        if(Thro < MIN_THRO) Thro = MIN_THRO;
-        if(Thro > 1000.0f)  Thro = 1000.0f;
-
-        Motor_Set(i,(uint16_t)Thro);
+        Motor_Set(i,(uint16_t)fmaxf(MIN_THRO,fminf(1000.0f,BaseThro + Mix[i]*Scale)));
     }
 }
