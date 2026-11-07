@@ -27,7 +27,7 @@ typedef enum
     REQUEST ,
     COLLECT
 
-} state_t;
+} calstate_e;
 
 extern float Acc_Bias[3];
 extern float Gyr_Bias[3];

@@ -6,7 +6,7 @@
 #include "Hardware.h"
 
 sensor_t Mode  = IMU;
-state_t  State = IDLE;
+calstate_e  CAL_State = IDLE;
 
 /*校准结果*/
 float Acc_Bias[3];
@@ -20,14 +20,14 @@ bool MAG_CalValid = false;
 
 void Cal_Start(sensor_t Sensor)
 {
-    if((Sensor == IMU && Mode == IMU && State == WAIT)||
-       (Sensor == MAG && Mode == MAG && State == WAIT))
+    if((Sensor == IMU && Mode == IMU && CAL_State == WAIT)||
+       (Sensor == MAG && Mode == MAG && CAL_State == WAIT))
     {
         Next = true;
         return;
     }
 
-    if(State != IDLE)
+    if(CAL_State != IDLE)
     {
         printf("CAL,%s,BUSY\r\n",(Sensor == IMU) ? "IMU" : "MAG");
         return;
@@ -35,15 +35,15 @@ void Cal_Start(sensor_t Sensor)
 
     Next  = false;
     Mode  = Sensor;
-    State = REQUEST;
+    CAL_State = REQUEST;
 }
 
 void Cal_Abort(void)
 {
-    if(State == IDLE) return;
+    if(CAL_State == IDLE) return;
 
     Next  = false;
-    State = IDLE;
+    CAL_State = IDLE;
     printf("CAL,%s,IDLE,ABORTED\r\n",(Mode == IMU) ? "IMU" : "MAG");
 }
 
@@ -70,7 +70,7 @@ static void Cal_IMU(void)
         Samples   = 0;
         TimeStamp = Now;
         Next      = false;
-        State     = COLLECT;
+        CAL_State     = COLLECT;
 
         if(Face < 6)
         {
@@ -82,13 +82,13 @@ static void Cal_IMU(void)
         }
     }
 
-    switch(State)
+    switch(CAL_State)
     {
         case REQUEST:
             Face      = 0;
             Samples   = 0;
             TimeStamp = Now;
-            State     = CHECK;
+            CAL_State     = CHECK;
 
             memset(Acc_Sum,0,sizeof(Acc_Sum));
             memset(Gyr_Sum,0,sizeof(Gyr_Sum));
@@ -116,7 +116,7 @@ static void Cal_IMU(void)
                 Face      = 0;
                 Samples   = 0;
                 TimeStamp = Now;
-                State     = COLLECT;
+                CAL_State     = COLLECT;
 
                 printf("CAL,IMU,COLLECT,FACE1\r\n");
             }
@@ -139,7 +139,7 @@ static void Cal_IMU(void)
                     Face ++;
                     Samples   = 0;
                     TimeStamp = Now;
-                    State     = WAIT;
+                    CAL_State     = WAIT;
 
                     if(Face < 6)
                     {
@@ -185,7 +185,7 @@ static void Cal_IMU(void)
                         printf("CAL,IMU,SCALE,%.2f,%.2f,%.2f\r\n",Acc_Scal[0],Acc_Scal[1],Acc_Scal[2]);
                         printf("CAL,IMU,ERROR\r\n");
 
-                        State = IDLE;
+                        CAL_State = IDLE;
                         break;
                     }
 
@@ -198,7 +198,7 @@ static void Cal_IMU(void)
                         printf("CAL,IMU,SAVE,ERROR\r\n");
                     }
 
-                    State = IDLE;
+                    CAL_State = IDLE;
                 }
             }
             break;
@@ -225,12 +225,12 @@ static void Cal_MAG(void)
     static uint16_t Count = 0;
     static uint8_t  Divider = 0;
 
-    switch(State)
+    switch(CAL_State)
     {
         case REQUEST:
             Count   = 0;
             Divider = 0;
-            State   = COLLECT;
+            CAL_State   = COLLECT;
 
             printf("CAL,MAG,COLLECT\r\n");
             break;
@@ -291,7 +291,7 @@ static void Cal_MAG(void)
                 }
             }
 
-            State = IDLE;
+            CAL_State = IDLE;
             break;
 
         case IDLE:

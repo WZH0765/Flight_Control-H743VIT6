@@ -98,14 +98,14 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
   MX_USART6_UART_Init();
-
   // MX_SDMMC1_SD_Init();
 
+  Motor_Init();
   Receiver_Start();
+
   Scheduler_Init();
   Hardware_Init();
   Flight_Init();
-  Motor_Init();
   // Flash_Load();
   Task_Init();
 
