@@ -80,7 +80,6 @@ void Prot_Process(char *Cmd)
 *  形  参：无
 *  说  明：从环形缓冲取字节
 ****************/
-
 void Prot_Run(void)
 {
     uint8_t Byte = 0;

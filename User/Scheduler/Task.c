@@ -9,9 +9,6 @@
 #include "Protocol.h"
 #include "Scheduler.h"
 
-/**********
-*   任务函数
-**********/
 void LED_Blink(void)
 {
     HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);

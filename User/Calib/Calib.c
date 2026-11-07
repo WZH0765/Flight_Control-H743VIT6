@@ -8,7 +8,7 @@
 sensor_t Mode  = IMU;
 calstate_e  CAL_State = IDLE;
 
-/*校准结果*/
+/*****校准结果*****/
 float Acc_Bias[3];
 float Gyr_Bias[3];
 float Mag_Bias[3];
