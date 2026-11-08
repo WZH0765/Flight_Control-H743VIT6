@@ -1,6 +1,5 @@
 import sys
 import os
-import time
 from collections import deque
 
 import serial.tools.list_ports
@@ -8,8 +7,8 @@ import pyqtgraph as pg
 from PyQt5.QtCore import Qt, QTimer, QSettings, QPointF, QEvent
 from PyQt5.QtGui import QIcon, QPainter, QColor, QPen, QPolygonF
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QVBoxLayout, QMessageBox,
-    QFrame, QLabel, QGridLayout, QPushButton, QWidget,
+    QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QMessageBox,
+    QFrame, QLabel, QGridLayout, QWidget,
 )
 from PyQt5 import uic
 
@@ -38,6 +37,8 @@ PROTOCOL_FIELDS = 12
 SIM_FIELDS = 13
 SIM_IDX_M1 = 8
 SIM_MISS_MAX = 20             # 连续多少帧刷新没收到数据就判掉线（20×50ms≈1s）
+SIM_PLOT_H   = 170            # 仿真页每张图的最小高度（2×2 田字格）
+RC_SEND_MS   = 20             # 虚拟遥控发包周期（ms），固件 200ms 收不到就回中
 
 # IMU 六面提示（物理朝向）
 FACE_TEXT = {
@@ -195,6 +196,63 @@ class FaceTile(QFrame):
 
 
 # ---------------------------------------------------------------- 主窗口
+# ---------------------------------------------------------------- 虚拟摇杆
+class StickPad(QWidget):
+    """一格虚拟摇杆：拖拽输出 −100~100，松手按轴自回中"""
+
+    def __init__(self, spring_x: bool = True, spring_y: bool = True, parent=None):
+        super().__init__(parent)
+        self.x = 0.0
+        self.y = 0.0
+        self.spring_x = spring_x
+        self.spring_y = spring_y
+        self.setFixedSize(110, 110)
+
+    def _set_from_pos(self, pos):
+        w = max(1, self.width() - 1)
+        h = max(1, self.height() - 1)
+
+        self.x = max(-100.0, min(100.0, (pos.x() / w * 2.0 - 1.0) * 100.0))
+        self.y = max(-100.0, min(100.0, (pos.y() / h * 2.0 - 1.0) * 100.0))
+        self.update()
+
+    def mousePressEvent(self, event):
+        self._set_from_pos(event.pos())
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.LeftButton:
+            self._set_from_pos(event.pos())
+
+    def mouseReleaseEvent(self, event):
+        if self.spring_x:
+            self.x = 0.0
+        if self.spring_y:
+            self.y = 0.0
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        w = self.width() - 1
+        h = self.height() - 1
+
+        painter.setPen(QPen(QColor("#3a4a5a"), 2))
+        painter.setBrush(QColor("#1a2332"))
+        painter.drawRoundedRect(1, 1, w - 2, h - 2, 10, 10)
+
+        painter.setPen(QPen(QColor("#2a3a4a"), 1))
+        painter.drawLine(int(w / 2), 4, int(w / 2), int(h) - 4)
+        painter.drawLine(4, int(h / 2), int(w) - 4, int(h / 2))
+
+        cx = w / 2.0 + self.x / 100.0 * (w / 2.0 - 8.0)
+        cy = h / 2.0 + self.y / 100.0 * (h / 2.0 - 8.0)
+
+        painter.setPen(QPen(QColor("#00d4ff"), 2))
+        painter.setBrush(QColor("#0078d4"))
+        painter.drawEllipse(int(cx) - 15, int(cy) - 15, 30, 30)
+
+
 class MainWindow(QMainWindow):
 
     def __init__(self):
@@ -227,11 +285,6 @@ class MainWindow(QMainWindow):
         self.sim_seen = 0         # 上一帧刷新时看到的帧数
         self.sim_miss = SIM_MISS_MAX
 
-        # --- 录制 ---
-        self.sim_record     = None
-        self.sim_rec_path   = ""
-        self.sim_rec_count  = 0
-
         # --- UI 组装 ---
         self._build_plot()
         self._build_attitude_indicator()
@@ -241,6 +294,12 @@ class MainWindow(QMainWindow):
         self.refresh_timer = QTimer(self)
         self.refresh_timer.setInterval(REFRESH_MS)
         self.refresh_timer.timeout.connect(self.refresh_ui)
+
+        # --- 虚拟遥控发包 ---
+        self.rc_timer = QTimer(self)
+        self.rc_timer.setInterval(RC_SEND_MS)
+        self.rc_timer.timeout.connect(self._send_rc)
+        self.rc_timer.start()
 
         # --- 主题 ---
         self.settings = QSettings("FlightControl", "HostTool")
@@ -300,22 +359,80 @@ class MainWindow(QMainWindow):
 
         self.sim_status = QLabel("仿真：等待固件数据…")
         self.sim_values = QLabel("")
-        self.sim_rec_btn = QPushButton("开始录制")
-        self.sim_rec_btn.setFixedSize(110, 32)
-        self.sim_rec_btn.clicked.connect(self._toggle_record)
 
-        info.addWidget(self.sim_status,  0, 0)
-        info.addWidget(self.sim_rec_btn, 0, 1)
-        info.addWidget(self.sim_values,  1, 0, 1, 2)
+        info.addWidget(self.sim_status, 0, 0)
+        info.addWidget(self.sim_values, 1, 0)
+
+        # 美国手（Mode 2）：左杆油门+偏航，右杆俯仰+横滚
+        self.stick_left  = StickPad(spring_x=True, spring_y=False)   # 油门不回中
+        self.stick_right = StickPad(spring_x=True, spring_y=True)
+        self.stick_left.y = 100.0                                    # 初始油门打到底
+
+        self.sim_stick_label = QLabel("")
+        self.sim_stick_label.setMinimumWidth(220)
+
+        self.sim_hint = QLabel("")
+        self.sim_hint.setStyleSheet("color: #ffa502;")
+
+        sticks = QHBoxLayout()
+        sticks.setSpacing(12)
+
+        left_box = QVBoxLayout()
+        left_box.setSpacing(0)
+        cap_left = QLabel("左杆 油门↑↓ / 偏航←→")
+        cap_left.setStyleSheet("font-size: 9pt;")
+        left_box.addWidget(cap_left)
+        left_box.addWidget(self.stick_left)
+
+        right_box = QVBoxLayout()
+        right_box.setSpacing(0)
+        cap_right = QLabel("右杆 俯仰↑↓ / 横滚←→")
+        cap_right.setStyleSheet("font-size: 9pt;")
+        right_box.addWidget(cap_right)
+        right_box.addWidget(self.stick_right)
+
+        sticks.addLayout(left_box)
+        sticks.addLayout(right_box)
+
+        info_box = QVBoxLayout()
+        info_box.setSpacing(2)
+        info_box.addWidget(self.sim_stick_label)
+        info_box.addWidget(self.sim_hint)
+        info_box.addStretch(1)
+        sticks.addLayout(info_box)
+
+        sticks.addStretch(1)
+
+        layout.addLayout(sticks)
         layout.addLayout(info)
 
-        self.sim_att_plot = self._make_sim_plot("姿态 (°)", -180, 180)
-        self.sim_gyr_plot = self._make_sim_plot("机体角速度 (°/s)", -600, 600)
-        self.sim_out_plot = self._make_sim_plot("油门 / 高度 (‰, cm)", 0, 1000)
+        self.sim_att_plot = self._make_sim_plot("姿态", -180, 180)
+        self.sim_gyr_plot = self._make_sim_plot("角速度", -600, 600)
+        self.sim_thr_plot = self._make_sim_plot("油门", 0, 1000)
+        self.sim_alt_plot = self._make_sim_plot("高度", 0, 250)
 
-        layout.addWidget(self.sim_att_plot, 1)
-        layout.addWidget(self.sim_gyr_plot, 1)
-        layout.addWidget(self.sim_out_plot, 1)
+        self.sim_plots = (
+            (self.sim_att_plot, -180, 180),
+            (self.sim_gyr_plot, -600, 600),
+            (self.sim_thr_plot,    0, 1000),
+            (self.sim_alt_plot,    0, 250),
+        )
+
+        for plot, y_min, y_max in self.sim_plots:
+            plot.setMinimumHeight(SIM_PLOT_H)
+
+        # 四张图排 2×2 田字格，一屏能全看到
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        grid.addWidget(self.sim_att_plot, 0, 0)
+        grid.addWidget(self.sim_gyr_plot, 0, 1)
+        grid.addWidget(self.sim_thr_plot, 1, 0)
+        grid.addWidget(self.sim_alt_plot, 1, 1)
+        layout.addLayout(grid, 1)
+
+        # 曲线加完之后再锁一次横轴：addCurve 会把自动量程重新打开
+        for plot, y_min, y_max in self.sim_plots:
+            plot.setXRange(0, DATA_LEN - 1, padding=0)
 
         self.sim_curve = {
             "roll":  self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["roll"],  width=2), name="Roll"),
@@ -326,18 +443,26 @@ class MainWindow(QMainWindow):
             "gy":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gy"], width=2), name="Gy"),
             "gz":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gz"], width=2), name="Gz"),
 
-            "m1":    self.sim_out_plot.plot(pen=pg.mkPen(SIM_COLOR["m1"], width=2), name="M1"),
-            "m2":    self.sim_out_plot.plot(pen=pg.mkPen(SIM_COLOR["m2"], width=2), name="M2"),
-            "m3":    self.sim_out_plot.plot(pen=pg.mkPen(SIM_COLOR["m3"], width=2), name="M3"),
-            "m4":    self.sim_out_plot.plot(pen=pg.mkPen(SIM_COLOR["m4"], width=2), name="M4"),
-            "alt":   self.sim_out_plot.plot(pen=pg.mkPen(SIM_COLOR["alt"], width=2, style=Qt.DashLine), name="高度"),
+            "m1":    self.sim_thr_plot.plot(pen=pg.mkPen(SIM_COLOR["m1"], width=2), name="M1"),
+            "m2":    self.sim_thr_plot.plot(pen=pg.mkPen(SIM_COLOR["m2"], width=2), name="M2"),
+            "m3":    self.sim_thr_plot.plot(pen=pg.mkPen(SIM_COLOR["m3"], width=2), name="M3"),
+            "m4":    self.sim_thr_plot.plot(pen=pg.mkPen(SIM_COLOR["m4"], width=2), name="M4"),
+
+            "alt":   self.sim_alt_plot.plot(pen=pg.mkPen(SIM_COLOR["alt"], width=2), name="高度"),
         }
+
+        # 曲线加完之后再锁一次量程：addCurve / setData 会把自动量程重新打开，
+        # 不锁的话平坦段的小抖动（±0.1°/s、±3‰）会被放大成满屏锯齿
+        for plot, y_min, y_max in self.sim_plots:
+            plot.setYRange(y_min, y_max, padding=0)
+            plot.setXRange(0, DATA_LEN - 1, padding=0)
 
     def _make_sim_plot(self, title: str, y_min: int, y_max: int):
         plot = pg.PlotWidget(title=title)
         plot.setYRange(y_min, y_max)
+        plot.setXRange(0, DATA_LEN - 1)                       # 横轴 = 采样点序号
         plot.showGrid(x=True, y=True, alpha=0.2)
-        plot.addLegend(offset=(10, 10))
+        plot.addLegend(offset=(6, 4), labelTextSize="8pt")
         plot.setMouseEnabled(x=False, y=False)
         return plot
 
@@ -370,41 +495,25 @@ class MainWindow(QMainWindow):
 
         self.sim_seq += 1
 
-        if self.sim_record is not None:
-            self.sim_record.write(line + "\n")
-            self.sim_rec_count += 1
+    def _send_rc(self):
+        """50Hz 把两个摇杆的杆量灌给固件（虚拟遥控）"""
+        Thro  = (100.0 - self.stick_left.y) * 5.0      # 杆上推 = 油门大，0~1000
+        Yaw   = self.stick_left.x
+        Roll  = self.stick_right.x
+        Pitch = self.stick_right.y
 
-    def _toggle_record(self):
-        """把收到的 SIM 帧原样写进 HostTool 目录下的 csv，便于离线分析"""
-        if self.serial_thread is None:
-            self.show_warning("提示", "请先连接飞控再录制")
+        self.sim_stick_label.setText(
+            f"油门 {Thro:4.0f}‰   偏航 {Yaw:+4.0f}%\n"
+            f"俯仰 {Pitch:+4.0f}%   横滚 {Roll:+4.0f}%")
+
+        if self.serial_thread is None or self.serial_thread.ser is None:
             return
 
-        if self.sim_record is None:
-            name = time.strftime("sim_%Y%m%d_%H%M%S.csv")
-            self.sim_rec_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
-            self.sim_record = open(self.sim_rec_path, "w", encoding="utf-8")
-            self.sim_record.write("# Flight_Control 固件仿真日志\n")
-            self.sim_record.write("# t_ms,roll_x10,pitch_x10,yaw_x10,gx_x10,gy_x10,gz_x10,"
-                                  "m1,m2,m3,m4,alt_cm\n")
-            self.sim_rec_count = 0
-
-            self.sim_rec_btn.setText("停止录制")
-            self._show_hint(f"录制中 → {name}")
-        else:
-            self._stop_record()
-
-    def _stop_record(self):
-        if self.sim_record is None:
-            return
-
-        self.sim_record.close()
-        self.sim_record = None
-        self.sim_rec_btn.setText("开始录制")
-
-        if self.sim_rec_path:
-            self._show_hint(f"已保存 {os.path.basename(self.sim_rec_path)}"
-                            f"（{self.sim_rec_count} 帧）")
+        try:
+            self.serial_thread.ser.write(
+                f"rc,{Thro:.0f},{Yaw:.0f},{Roll:.0f},{Pitch:.0f}\n".encode())
+        except Exception:
+            pass
 
     def _update_sim(self):
         if self.sim_seq != self.sim_seen:
@@ -421,6 +530,11 @@ class MainWindow(QMainWindow):
             return                      # 不在仿真页就不用刷曲线
 
         d = self.sim_latest
+
+        if d["alt"] <= 2 and max(d["m1"], d["m2"], d["m3"], d["m4"]) < 400:
+            self.sim_hint.setText("油门不足，未离地：左杆推到 45% 左右（约 446‰）才能悬停")
+        else:
+            self.sim_hint.setText("")
 
         self.sim_status.setText(f"仿真：运行中  t={d['t']}ms")
         self.sim_values.setText(
@@ -839,7 +953,6 @@ class MainWindow(QMainWindow):
         # ============================================================
         normal_btns = [
             self.theme_button, self.refresh_button, self.link_button,
-            self.sim_rec_btn,
             self.start_accgyr, self.start_mag,
             self.reset_accgyr, self.reset_mag
         ]
@@ -886,6 +999,18 @@ class MainWindow(QMainWindow):
             axis = self.plot.getAxis(ax_name)
             axis.setPen(t["plot_grid"])
             axis.setTextPen(t["plot_text"])
+
+        # 仿真页四张图跟着主题走（背景、轴线、标题、图例文字）
+        for plot, _y_min, _y_max in self.sim_plots:
+            plot.setBackground(t["plot_bg"])
+            for ax_name in ("left", "bottom"):
+                axis = plot.getAxis(ax_name)
+                axis.setPen(t["plot_grid"])
+                axis.setTextPen(t["plot_text"])
+
+            plot.setTitle(plot.plotItem.titleLabel.text, color=t["plot_text"])
+            if plot.plotItem.legend is not None:
+                plot.plotItem.legend.setLabelTextColor(t["plot_text"])
 
         self.ahi.set_colors(bg=t["plot_bg"], border=t["plot_grid"], text=t["plot_text"])
         self.theme_button.setText("☀" if theme_name == "light" else "🌙")
@@ -1069,7 +1194,6 @@ class MainWindow(QMainWindow):
 
     # ============================================================ 退出
     def closeEvent(self, event):
-        self._stop_record()
         if self.serial_thread is not None:
             self.serial_thread.stop()
             self.serial_thread = None

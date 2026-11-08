@@ -8,8 +8,7 @@
 #include "hardware.h"
 #include "Simulator.h"
 
-extern float      SetThro;
-extern float      SetRate[3];
+extern float SetThro;
 extern fltstate_e State;
 
 uint16_t SimuThro[4];           //模拟量油门（0~1000）
@@ -81,15 +80,6 @@ void Simulator(void)
     float Tq[3] = {0.0f,0.0f,0.0f};
     float q0 = Sim_Q[0],q1 = Sim_Q[1],q2 = Sim_Q[2],q3 = Sim_Q[3];
     float Sum = 0.0f;
-
-#ifdef SIM_STEP
-    /*自带激励：1s 起 Roll 给 100°/s 持续 0.3s，4s 一轮，正负交替。
-      交替是必须的——角速度环不保持角度，同向一直给会越滚越歪，最后翼面朝下飞不起来*/
-    uint32_t Tick = millis() % 4000u;
-    float    Dir  = ((millis() / 4000u) & 1u) ? -1.0f : +1.0f;
-
-    SetRate[1] = ((Tick >= 1000u) && (Tick < 1300u)) ? 100.0f*Dir : 0.0f;
-#endif
 
     /*1) 电机推力：一阶滞后 + 油门平方特性*/
     for(uint8_t i = 0;i < 4;i ++)
@@ -187,6 +177,12 @@ void Simulator(void)
     HW_Sample.Mag[0] =  R[0][0]*0.20f + R[1][0]*0.0f + R[2][0]*0.40f;
     HW_Sample.Mag[1] =  R[0][1]*0.20f + R[1][1]*0.0f + R[2][1]*0.40f;
     HW_Sample.Mag[2] =  R[0][2]*0.20f + R[1][2]*0.0f + R[2][2]*0.40f;
+
+    /*7b) 气压计：真机 DPS310 只给 Pa，所以按 ISA 由高度反算，让高度环走真实路径*/
+    float AltM = -Sim_P[2];
+
+    HW_Sample.Pressure    = 101325.0f*powf(1.0f - AltM/44330.0f,5.25588f) + SIM_BAR_NOISE*Simulator_Rand();
+    HW_Sample.Temperature = 25.0f;
 
     /*8) 50Hz 遥测：t, 姿态(x10°), 机体系角速度(x10°/s), 四路油门*/
     static uint32_t Last = 0;

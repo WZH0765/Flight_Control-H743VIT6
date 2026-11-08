@@ -3,10 +3,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define MIN_THRO    1.0f
-#define MIX_GAIN    400.0f
-#define IDLE_THRO   50.0f
-#define RAD_TO_DEG  57.29578f
+#define MIN_THRO      1.0f
+#define MIX_GAIN      400.0f
+#define IDLE_THRO     50.0f
+#define RAD_TO_DEG    57.29578f
+
+#define RC_RATE_MAX   200.0f    //满杆角速度（°/s）
+#define RC_TIMEOUT_MS 200       //遥控超时就回中
 
 typedef enum
 {
@@ -18,3 +21,4 @@ typedef enum
 
 void Flight_Init(void);
 void Flight_Update(float Gx,float Gy,float Gz,float dt);
+void Flight_Stick(float Thro,float Yaw,float Roll,float Pitch);

@@ -3,6 +3,7 @@
 #include "Motor.h"
 #include "Calib.h"
 #include "Flight.h"
+#include "SysTime.h"
 #include "hardware.h"
 
 float SetThro = 0.0f;
@@ -39,6 +40,20 @@ void Flight_Init(void)
     PID_Init(&PID_YawRate  ,Kp[0],Ki[0],Kd[0]);
     PID_Init(&PID_RollRate ,Kp[1],Ki[1],Kd[1]);
     PID_Init(&PID_PitchRate,Kp[2],Ki[2],Kd[2]);
+}
+
+/***************
+*  遥控输入
+*
+*  形  参：Thro 0~1000，Yaw/Roll/Pitch −100~100（杆量百分比）
+****************/
+void Flight_Stick(float Thro,float Yaw,float Roll,float Pitch)
+{
+    SetThro = fmaxf(0.0f,fminf(1000.0f,Thro));
+
+    SetRate[0] = fmaxf(-100.0f,fminf(100.0f,Yaw  ))*RC_RATE_MAX/100.0f;
+    SetRate[1] = fmaxf(-100.0f,fminf(100.0f,Roll ))*RC_RATE_MAX/100.0f;
+    SetRate[2] = fmaxf(-100.0f,fminf(100.0f,Pitch))*RC_RATE_MAX/100.0f;
 }
 
 void Flight_Update(float Gx,float Gy,float Gz,float dt)

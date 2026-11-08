@@ -1,9 +1,12 @@
 #include <ctype.h>
 #include "Calib.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include "Flight.h"
 #include <stdbool.h>
 #include "Protocol.h"
+#include "Simulator.h"
 
 static volatile uint16_t Head = 0;
 static volatile uint16_t Tail = 0;
@@ -44,6 +47,7 @@ bool Prot_ReadBuf(uint8_t *Data)
 void Prot_Process(char *Cmd)
 {
     sensor_t Sensor;
+    int  Val[4]   = {0};
     char Name[16] = {0};
     char Arg1[16] = {0};
     char Arg2[16] = {0};
@@ -55,9 +59,19 @@ void Prot_Process(char *Cmd)
     }
     sscanf(Cmd,"%15s %15s %15s",Name,Arg1,Arg2);
 
-    if(strcmp(Name,"CAL") != 0) return;
+#ifdef USE_SIM
+/*虚拟遥控*/
+    if(strcmp(Name,"RC") == 0)
+    {
+        sscanf(Cmd,"%*s %d %d %d %d",&Val[0],&Val[1],&Val[2],&Val[3]);
+        Flight_Stick((float)Val[0],(float)Val[1],(float)Val[2],(float)Val[3]);
+        return;
+    }
 
-/*校准参数加载查询*/
+    if(strcmp(Name,"CAL") != 0) return;
+#endif
+
+/*校准参数加载*/
     if(strcmp(Arg1,"STATUS") == 0)
     {
         printf("CAL,STATUS,IMU=%d,MAG=%d\r\n",IMU_CalValid ? 1 : 0,MAG_CalValid ? 1 : 0);
