@@ -1,6 +1,5 @@
 #include <math.h>
 #include "AHRS.h"
-#include "Motor.h"
 #include <stdio.h>
 #include "Calib.h"
 #include <string.h>
@@ -65,7 +64,7 @@ void Simulator_Init(void)
     MAG_CalValid = false;
 
     State   = ARM;
-    SetThro = 417.0f;
+    SetThro = 450.0f;           //悬停 417 太紧，机体歪 25° 时就掉高度了，留够余量
     printf("SIM,start\r\n");
 }
 
@@ -84,10 +83,12 @@ void Simulator(void)
     float Sum = 0.0f;
 
 #ifdef SIM_STEP
-    /*自带激励：2s 起 Roll 给 100°/s，4s 回零，6s 一轮*/
-    uint32_t Tick = millis() % 6000u;
+    /*自带激励：1s 起 Roll 给 100°/s 持续 0.3s，4s 一轮，正负交替。
+      交替是必须的——角速度环不保持角度，同向一直给会越滚越歪，最后翼面朝下飞不起来*/
+    uint32_t Tick = millis() % 4000u;
+    float    Dir  = ((millis() / 4000u) & 1u) ? -1.0f : +1.0f;
 
-    SetRate[1] = ((Tick >= 2000u) && (Tick < 4000u)) ? 100.0f : 0.0f;
+    SetRate[1] = ((Tick >= 1000u) && (Tick < 1300u)) ? 100.0f*Dir : 0.0f;
 #endif
 
     /*1) 电机推力：一阶滞后 + 油门平方特性*/
@@ -166,6 +167,14 @@ void Simulator(void)
         Sim_W[0] *= 0.5f; Sim_W[1] *= 0.5f; Sim_W[2] *= 0.5f;
     }
 
+    /*天花板：没有高度环，不挡一下会一直往上飞，曲线到顶就没信息了*/
+    if(Sim_P[2] < -SIM_CEIL)
+    {
+        Sim_P[2] = -SIM_CEIL;
+
+        if(Sim_V[2] < 0.0f) Sim_V[2] = 0.0f;
+    }
+
     /*7) 合成传感器：AHRS 期望"机体系比力"，水平时 Acc=(0,0,-g)*/
     HW_Sample.Gyr[0] = Sim_W[0] + SIM_GYR_NOISE*Simulator_Rand();
     HW_Sample.Gyr[1] = Sim_W[1] + SIM_GYR_NOISE*Simulator_Rand();
@@ -179,10 +188,10 @@ void Simulator(void)
     HW_Sample.Mag[1] =  R[0][1]*0.20f + R[1][1]*0.0f + R[2][1]*0.40f;
     HW_Sample.Mag[2] =  R[0][2]*0.20f + R[1][2]*0.0f + R[2][2]*0.40f;
 
-    /*8) 20Hz 遥测：t, 姿态(x10°), 机体系角速度(x10°/s), 四路油门*/
+    /*8) 50Hz 遥测：t, 姿态(x10°), 机体系角速度(x10°/s), 四路油门*/
     static uint32_t Last = 0;
 
-    if(millis() - Last >= 100)
+    if(millis() - Last >= 20)
     {
         Last = millis();
 

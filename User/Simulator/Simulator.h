@@ -15,6 +15,7 @@
 #define SIM_INERTIA   0.005f    //单轴转动惯量（kg·m²）
 #define SIM_ACC_NOISE 0.100f    //m/s²
 #define SIM_GYR_NOISE 0.010f    //rad/s
+#define SIM_CEIL      2.000f    //仿真天花板（m），避免没有高度环时一直往上飞
 
 extern uint16_t SimuThro[4];
 

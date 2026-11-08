@@ -1,5 +1,6 @@
 import sys
-import os   
+import os
+import time
 from collections import deque
 
 import serial.tools.list_ports
@@ -8,7 +9,7 @@ from PyQt5.QtCore import Qt, QTimer, QSettings, QPointF, QEvent
 from PyQt5.QtGui import QIcon, QPainter, QColor, QPen, QPolygonF
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QMessageBox,
-    QFrame, QLabel, QGridLayout, QWidget,
+    QFrame, QLabel, QGridLayout, QPushButton, QWidget,
 )
 from PyQt5 import uic
 
@@ -31,6 +32,12 @@ DEFAULT_BAUD   = 115200
 IDX_YAW, IDX_ROLL, IDX_PITCH = 0, 1, 2
 IDX_GYR, IDX_ACC, IDX_MAG, IDX_BAR = 8, 9, 10, 11
 PROTOCOL_FIELDS = 12
+
+# 仿真协议（13 字段）：
+# SIM,t_ms,Roll×10,Pitch×10,Yaw×10,Gx×10,Gy×10,Gz×10,M1,M2,M3,M4,高度cm
+SIM_FIELDS = 13
+SIM_IDX_M1 = 8
+SIM_MISS_MAX = 20             # 连续多少帧刷新没收到数据就判掉线（20×50ms≈1s）
 
 # IMU 六面提示（物理朝向）
 FACE_TEXT = {
@@ -56,9 +63,17 @@ FACE_COLOR = "#4FC3F7"
 # 页面索引
 PAGE_DASHBOARD   = 0
 PAGE_CALIBRATION = 1
-PAGE_CONFIG      = 2
+PAGE_SIM         = 2          # 复用 .ui 里空的 page_config
 PAGE_HELP        = 3
 PAGE_ABOUT       = 4
+
+# 仿真曲线配色
+SIM_COLOR = {
+    "roll":  "#2ed573", "pitch": "#a55eea", "yaw":   "#ff4757",
+    "gx":    "#00a8ff", "gy":    "#e1b12c", "gz":    "#4cd137",
+    "m1":    "#ff6b81", "m2":    "#ffa502", "m3":    "#1e90ff",
+    "m4":    "#7bed9f", "alt":   "#dfe4ea",
+}
 
 
 def resource_path(relative_path: str) -> str:
@@ -198,9 +213,29 @@ class MainWindow(QMainWindow):
         self.roll_data  = deque([0] * DATA_LEN, maxlen=DATA_LEN)
         self.pitch_data = deque([0] * DATA_LEN, maxlen=DATA_LEN)
 
+        # --- 仿真数据 ---
+        self.sim_latest = {
+            "t": 0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0,
+            "gx": 0.0, "gy": 0.0, "gz": 0.0,
+            "m1": 0, "m2": 0, "m3": 0, "m4": 0, "alt": 0.0,
+        }
+        self.sim_curves = {
+            key: deque([0.0] * DATA_LEN, maxlen=DATA_LEN)
+            for key in SIM_COLOR
+        }
+        self.sim_seq  = 0         # 收到的仿真帧数
+        self.sim_seen = 0         # 上一帧刷新时看到的帧数
+        self.sim_miss = SIM_MISS_MAX
+
+        # --- 录制 ---
+        self.sim_record     = None
+        self.sim_rec_path   = ""
+        self.sim_rec_count  = 0
+
         # --- UI 组装 ---
         self._build_plot()
         self._build_attitude_indicator()
+        self._build_simulation()
 
         # --- 定时刷新 ---
         self.refresh_timer = QTimer(self)
@@ -251,6 +286,152 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.ahi)
 
+    # ============================================================ 仿真页
+    def _build_simulation(self):
+        """复用 .ui 里空的 page_config，画姿态 / 角速度 / 油门三条曲线"""
+        self.btn_config.setText("Simu")
+
+        layout = QVBoxLayout(self.page_config)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        info = QGridLayout()
+        info.setSpacing(4)
+
+        self.sim_status = QLabel("仿真：等待固件数据…")
+        self.sim_values = QLabel("")
+        self.sim_rec_btn = QPushButton("开始录制")
+        self.sim_rec_btn.setFixedSize(110, 32)
+        self.sim_rec_btn.clicked.connect(self._toggle_record)
+
+        info.addWidget(self.sim_status,  0, 0)
+        info.addWidget(self.sim_rec_btn, 0, 1)
+        info.addWidget(self.sim_values,  1, 0, 1, 2)
+        layout.addLayout(info)
+
+        self.sim_att_plot = self._make_sim_plot("姿态 (°)", -180, 180)
+        self.sim_gyr_plot = self._make_sim_plot("机体角速度 (°/s)", -600, 600)
+        self.sim_out_plot = self._make_sim_plot("油门 / 高度 (‰, cm)", 0, 1000)
+
+        layout.addWidget(self.sim_att_plot, 1)
+        layout.addWidget(self.sim_gyr_plot, 1)
+        layout.addWidget(self.sim_out_plot, 1)
+
+        self.sim_curve = {
+            "roll":  self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["roll"],  width=2), name="Roll"),
+            "pitch": self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["pitch"], width=2), name="Pitch"),
+            "yaw":   self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["yaw"],   width=2), name="Yaw"),
+
+            "gx":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gx"], width=2), name="Gx"),
+            "gy":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gy"], width=2), name="Gy"),
+            "gz":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gz"], width=2), name="Gz"),
+
+            "m1":    self.sim_out_plot.plot(pen=pg.mkPen(SIM_COLOR["m1"], width=2), name="M1"),
+            "m2":    self.sim_out_plot.plot(pen=pg.mkPen(SIM_COLOR["m2"], width=2), name="M2"),
+            "m3":    self.sim_out_plot.plot(pen=pg.mkPen(SIM_COLOR["m3"], width=2), name="M3"),
+            "m4":    self.sim_out_plot.plot(pen=pg.mkPen(SIM_COLOR["m4"], width=2), name="M4"),
+            "alt":   self.sim_out_plot.plot(pen=pg.mkPen(SIM_COLOR["alt"], width=2, style=Qt.DashLine), name="高度"),
+        }
+
+    def _make_sim_plot(self, title: str, y_min: int, y_max: int):
+        plot = pg.PlotWidget(title=title)
+        plot.setYRange(y_min, y_max)
+        plot.showGrid(x=True, y=True, alpha=0.2)
+        plot.addLegend(offset=(10, 10))
+        plot.setMouseEnabled(x=False, y=False)
+        return plot
+
+    def _handle_sim_line(self, line: str):
+        """解析一行 SIM,... 数据"""
+        parts = line.split(",")
+        if len(parts) != SIM_FIELDS:
+            return
+        try:
+            data = {
+                "t":     int(parts[1]),
+                "roll":  int(parts[2]) / 10.0,
+                "pitch": int(parts[3]) / 10.0,
+                "yaw":   int(parts[4]) / 10.0,
+                "gx":    int(parts[5]) / 10.0,
+                "gy":    int(parts[6]) / 10.0,
+                "gz":    int(parts[7]) / 10.0,
+                "m1":    int(parts[SIM_IDX_M1]),
+                "m2":    int(parts[SIM_IDX_M1 + 1]),
+                "m3":    int(parts[SIM_IDX_M1 + 2]),
+                "m4":    int(parts[SIM_IDX_M1 + 3]),
+                "alt":   int(parts[12]),
+            }
+        except (ValueError, IndexError):
+            return
+
+        self.sim_latest.update(data)
+        for key in SIM_COLOR:
+            self.sim_curves[key].append(float(data[key]))
+
+        self.sim_seq += 1
+
+        if self.sim_record is not None:
+            self.sim_record.write(line + "\n")
+            self.sim_rec_count += 1
+
+    def _toggle_record(self):
+        """把收到的 SIM 帧原样写进 HostTool 目录下的 csv，便于离线分析"""
+        if self.serial_thread is None:
+            self.show_warning("提示", "请先连接飞控再录制")
+            return
+
+        if self.sim_record is None:
+            name = time.strftime("sim_%Y%m%d_%H%M%S.csv")
+            self.sim_rec_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
+            self.sim_record = open(self.sim_rec_path, "w", encoding="utf-8")
+            self.sim_record.write("# Flight_Control 固件仿真日志\n")
+            self.sim_record.write("# t_ms,roll_x10,pitch_x10,yaw_x10,gx_x10,gy_x10,gz_x10,"
+                                  "m1,m2,m3,m4,alt_cm\n")
+            self.sim_rec_count = 0
+
+            self.sim_rec_btn.setText("停止录制")
+            self._show_hint(f"录制中 → {name}")
+        else:
+            self._stop_record()
+
+    def _stop_record(self):
+        if self.sim_record is None:
+            return
+
+        self.sim_record.close()
+        self.sim_record = None
+        self.sim_rec_btn.setText("开始录制")
+
+        if self.sim_rec_path:
+            self._show_hint(f"已保存 {os.path.basename(self.sim_rec_path)}"
+                            f"（{self.sim_rec_count} 帧）")
+
+    def _update_sim(self):
+        if self.sim_seq != self.sim_seen:
+            self.sim_seen = self.sim_seq
+            self.sim_miss = 0
+        elif self.sim_miss < SIM_MISS_MAX:
+            self.sim_miss += 1
+
+        if self.sim_miss >= SIM_MISS_MAX:
+            self.sim_status.setText("仿真：无数据（检查固件 USE_SIM 与串口）")
+            return
+
+        if self.stackedWidget.currentIndex() != PAGE_SIM:
+            return                      # 不在仿真页就不用刷曲线
+
+        d = self.sim_latest
+
+        self.sim_status.setText(f"仿真：运行中  t={d['t']}ms")
+        self.sim_values.setText(
+            f"姿态 {d['roll']:+.1f} / {d['pitch']:+.1f} / {d['yaw']:+.1f}°   "
+            f"角速度 {d['gx']:+.0f} / {d['gy']:+.0f} / {d['gz']:+.0f}°/s   "
+            f"油门 {d['m1']} / {d['m2']} / {d['m3']} / {d['m4']}‰   高度 {d['alt']:.1f}cm"
+        )
+
+        for key, curve in self.sim_curve.items():
+            curve.setData(list(self.sim_curves[key]))
+
     # ============================================================ 提示信息
     def _show_hint(self, text):
         self.hint_label.setText(text)
@@ -276,7 +457,7 @@ class MainWindow(QMainWindow):
         self._nav_map = [
             (self.btn_dashboard,   PAGE_DASHBOARD),
             (self.btn_calibration, PAGE_CALIBRATION),
-            (self.btn_config,      PAGE_CONFIG),
+            (self.btn_config,      PAGE_SIM),
             (self.btn_help,        PAGE_HELP),
             (self.btn_about,       PAGE_ABOUT),
         ]
@@ -658,6 +839,7 @@ class MainWindow(QMainWindow):
         # ============================================================
         normal_btns = [
             self.theme_button, self.refresh_button, self.link_button,
+            self.sim_rec_btn,
             self.start_accgyr, self.start_mag,
             self.reset_accgyr, self.reset_mag
         ]
@@ -674,7 +856,7 @@ class MainWindow(QMainWindow):
                 color: {t['label_color']};
                 background-color: {btn_bg};
                 border: 1px solid {btn_border};
-                border-radius: 4px;
+                border-radius: 6px;
             }}
             QPushButton:hover {{ background-color: {btn_hover}; }}
             QPushButton:pressed {{ background-color: {btn_pressed}; }}
@@ -819,6 +1001,9 @@ class MainWindow(QMainWindow):
 
     def on_data(self, line: str):
         upper = line.upper()
+        if upper.startswith("SIM,"):
+            self._handle_sim_line(line)
+            return
         if upper.startswith("CAL,STATUS,"):
             self._handle_cal_status(line)
             return
@@ -861,6 +1046,7 @@ class MainWindow(QMainWindow):
         self._update_health()
         self._update_curves()
         self._update_attitude()
+        self._update_sim()
 
     def _update_labels(self):
         self.yaw_value.setText(f"{self.latest['yaw']:.1f}°")
@@ -883,6 +1069,7 @@ class MainWindow(QMainWindow):
 
     # ============================================================ 退出
     def closeEvent(self, event):
+        self._stop_record()
         if self.serial_thread is not None:
             self.serial_thread.stop()
             self.serial_thread = None

@@ -107,7 +107,7 @@ int main(void)
   Scheduler_Init();
   Hardware_Init();
   Flight_Init();
-  Flash_Load();
+  // Flash_Load();
 /******SIMULATOR********/
 #ifdef USE_SIM
   Simulator_Init();
