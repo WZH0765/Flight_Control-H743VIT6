@@ -15,6 +15,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include "Simulator.h"
 #include "GPS.h"
 #include "Task.h"
 #include "AHRS.h"
@@ -43,7 +44,7 @@
 
 // #define USER_DEBUG_AHRS
 // #define USER_DEBUG_DEVICE
-#define USER_DEBUG_HOST_TOOL
+// #define USER_DEBUG_HOST_TOOL
 
 /* USER CODE END PD */
 
@@ -106,7 +107,12 @@ int main(void)
   Scheduler_Init();
   Hardware_Init();
   Flight_Init();
-  // Flash_Load();
+  Flash_Load();
+/******SIMULATOR********/
+#ifdef USE_SIM
+  Simulator_Init();
+#endif
+/**********************/
   Task_Init();
 
   while(1)

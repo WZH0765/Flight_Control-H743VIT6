@@ -1,6 +1,7 @@
 #include "tim.h"
 #include "Motor.h"
 #include <string.h>
+#include "Simulator.h"
 
 __attribute__((section(".dma_buffer")))
 uint32_t Motor_Buffer[2][MOTOR_BUF_LEN * 4];
@@ -10,7 +11,6 @@ void Motor_Init(void)
     memset(Motor_Buffer,0,sizeof(Motor_Buffer));
 
     Motor_Stop();
-
     TIM2->DCR = (3 << 8) | (0x34 >> 2);
     TIM3->DCR = (3 << 8) | (0x34 >> 2);
 
@@ -39,6 +39,10 @@ void Motor_Set(uint8_t Index,uint16_t Throttle)
     uint16_t Packet = 0;
     uint8_t  Timer = Index >> 1;
     uint8_t  Slot  = (uint8_t)((Index & 1) + (Timer == 0 ? 2 : 0));
+
+#ifdef USE_SIM
+    SimuThro[Index] = Throttle;
+#endif
 
     if(Throttle >= 1000)   DShot = MOTOR_MAX;
     else if(Throttle > 0)  DShot = MOTOR_MIN + (uint16_t)((uint32_t)Throttle*(MOTOR_MAX - MOTOR_MIN)/1000);

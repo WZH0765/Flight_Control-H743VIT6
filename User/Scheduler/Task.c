@@ -8,6 +8,7 @@
 #include "Receiver.h"
 #include "Protocol.h"
 #include "Scheduler.h"
+#include "Simulator.h"
 
 void LED_Blink(void)
 {
@@ -75,11 +76,16 @@ void FLT_Ctrl(void)
  */
 void Task_Init(void)
 {
+#ifdef USE_SIM
+    Scheduler_Add("SIMULATOR" ,Simulator,1000   ,TASK_PRIORITY_REALTIME);
+#endif
     Scheduler_Add("AHRS_CTRL" ,AHRS_Ctrl,1000   ,TASK_PRIORITY_HIGH    );
     Scheduler_Add("FLT_CTRL"  ,FLT_Ctrl ,1000   ,TASK_PRIORITY_HIGH    );
+#ifndef USE_SIM
     Scheduler_Add("IMU_READ"  ,IMU_Read ,1000   ,TASK_PRIORITY_REALTIME);
     Scheduler_Add("MAG_READ"  ,MAG_Read ,10000  ,TASK_PRIORITY_MED     );
     Scheduler_Add("BAR_READ"  ,BAR_Read ,20000  ,TASK_PRIORITY_MED_LOW );
+#endif
     Scheduler_Add("SENSOR_CAL",Cal_Run  ,1000   ,TASK_PRIORITY_LOW     );
     Scheduler_Add("PROTOCOL"  ,Prot_Run ,10000  ,TASK_PRIORITY_LOW     );
     Scheduler_Add("LED"       ,LED_Blink,1000000,TASK_PRIORITY_LOW     );

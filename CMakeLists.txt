@@ -57,6 +57,7 @@ file(GLOB USER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/User/Motor/*.c"
     "${CMAKE_SOURCE_DIR}/User/Calib/*.c"
     "${CMAKE_SOURCE_DIR}/User/Flight/*.c"
+    "${CMAKE_SOURCE_DIR}/User/Simulator/*.c"
     "${CMAKE_SOURCE_DIR}/User/Driver/*.c"
     "${CMAKE_SOURCE_DIR}/User/Health/*.c"
     "${CMAKE_SOURCE_DIR}/User/Protocol/*.c"
@@ -79,6 +80,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/User/Calib
     ${CMAKE_SOURCE_DIR}/User/Motor
     ${CMAKE_SOURCE_DIR}/User/Flight
+    ${CMAKE_SOURCE_DIR}/User/Simulator
     ${CMAKE_SOURCE_DIR}/User/Driver
     ${CMAKE_SOURCE_DIR}/User/Health
     ${CMAKE_SOURCE_DIR}/User/Protocol
