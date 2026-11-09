@@ -63,7 +63,7 @@ void Simulator_Init(void)
     MAG_CalValid = false;
 
     State   = ARM;
-    SetThro = 450.0f;           //悬停 417 太紧，机体歪 25° 时就掉高度了，留够余量
+    SetThro = 490.0f;           //悬停点（Tmax=6N 时 base 515‰，对应 SetThro≈490）
     printf("SIM,start\r\n");
 }
 
@@ -134,8 +134,9 @@ void Simulator(void)
     R[2][1] = 2.0f*(q2*q3 + q0*q1);
     R[2][2] = 1.0f - 2.0f*(q1*q1 + q2*q2);
 
-    /*5) 线运动：推力沿机体 -Z，重力沿 NED +Z*/
+    /*5) 线运动：推力沿机体 -Z、重力沿 NED +Z、气动阻力沿速度反方向（∝v²）*/
     float An[3];
+    float Speed = sqrtf(Sim_V[0]*Sim_V[0] + Sim_V[1]*Sim_V[1] + Sim_V[2]*Sim_V[2]);
 
     An[0] = -Sum*R[0][2]/SIM_MASS;
     An[1] = -Sum*R[1][2]/SIM_MASS;
@@ -143,26 +144,21 @@ void Simulator(void)
 
     for(uint8_t i = 0;i < 3;i ++)
     {
+        An[i] -= SIM_DRAG*Speed*Sim_V[i]/SIM_MASS;
+
         Sim_V[i] += An[i]*0.001f;
         Sim_P[i] += Sim_V[i]*0.001f;
     }
 
-    /*6) 地面约束：落地就把速度清掉，姿态慢慢停住*/
+    /*6) 地面约束：落地就把速度清掉，角速度按 50ms 时间常数衰减
+           （原来每毫秒减半太狠，贴地时打杆几乎看不到角速度响应）*/
     if(Sim_P[2] > 0.0f)
     {
         Sim_P[2] = 0.0f;
 
         Sim_V[0] = 0.0f; Sim_V[1] = 0.0f; Sim_V[2] = 0.0f;
 
-        Sim_W[0] *= 0.5f; Sim_W[1] *= 0.5f; Sim_W[2] *= 0.5f;
-    }
-
-    /*天花板：没有高度环，不挡一下会一直往上飞，曲线到顶就没信息了*/
-    if(Sim_P[2] < -SIM_CEIL)
-    {
-        Sim_P[2] = -SIM_CEIL;
-
-        if(Sim_V[2] < 0.0f) Sim_V[2] = 0.0f;
+        Sim_W[0] *= 0.98f; Sim_W[1] *= 0.98f; Sim_W[2] *= 0.98f;
     }
 
     /*7) 合成传感器：AHRS 期望"机体系比力"，水平时 Acc=(0,0,-g)*/
@@ -184,14 +180,19 @@ void Simulator(void)
     HW_Sample.Pressure    = 101325.0f*powf(1.0f - AltM/44330.0f,5.25588f) + SIM_BAR_NOISE*Simulator_Rand();
     HW_Sample.Temperature = 25.0f;
 
-    /*8) 50Hz 遥测：t, 姿态(x10°), 机体系角速度(x10°/s), 四路油门*/
+    /*8) 50Hz 遥测：t, 估计姿态(x10°), 机体系角速度(x10°/s), 四路油门, 高度(cm), 真实姿态(x10°)*/
     static uint32_t Last = 0;
 
     if(millis() - Last >= 20)
     {
         Last = millis();
 
-        printf("SIM,%lu,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n",
+        /*模型自己的姿态（真值），用来和 AHRS 估计值对照*/
+        float T_Roll  = atan2f(2.0f*(q0*q1 + q2*q3),1.0f - 2.0f*(q1*q1 + q2*q2));
+        float T_Pitch = asinf(fmaxf(-1.0f,fminf(1.0f,2.0f*(q0*q2 - q3*q1))));
+        float T_Yaw   = atan2f(2.0f*(q0*q3 + q1*q2),1.0f - 2.0f*(q2*q2 + q3*q3));
+
+        printf("SIM,%lu,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n",
                Last,
                (int)(AHRS.Roll *RAD_TO_DEG*10.0f),
                (int)(AHRS.Pitch*RAD_TO_DEG*10.0f),
@@ -200,6 +201,9 @@ void Simulator(void)
                (int)(Sim_W[1]*RAD_TO_DEG*10.0f),
                (int)(Sim_W[2]*RAD_TO_DEG*10.0f),
                SimuThro[0],SimuThro[1],SimuThro[2],SimuThro[3],
-               (int)(-Sim_P[2]*100.0f));
+               (int)(-Sim_P[2]*100.0f),
+               (int)(T_Roll *RAD_TO_DEG*10.0f),
+               (int)(T_Pitch*RAD_TO_DEG*10.0f),
+               (int)(T_Yaw  *RAD_TO_DEG*10.0f));
     }
 }

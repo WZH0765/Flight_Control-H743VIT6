@@ -1,14 +1,15 @@
 import sys
 import os
+import time
 from collections import deque
 
 import serial.tools.list_ports
 import pyqtgraph as pg
-from PyQt5.QtCore import Qt, QTimer, QSettings, QPointF, QEvent
+from PyQt5.QtCore import Qt, QTimer, QSettings, QPointF, QEvent, QRectF
 from PyQt5.QtGui import QIcon, QPainter, QColor, QPen, QPolygonF
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QMessageBox,
-    QFrame, QLabel, QGridLayout, QWidget,
+    QFrame, QLabel, QGridLayout, QSizePolicy, QWidget,
 )
 from PyQt5 import uic
 
@@ -19,7 +20,6 @@ from attitude_indicator import AttitudeIndicator
 # ---------------------------------------------------------------- 常量
 pg.setConfigOptions(antialias=True)
 
-# 高 DPI（必须在 QApplication 之前设置）
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
@@ -34,13 +34,13 @@ PROTOCOL_FIELDS = 12
 
 # 仿真协议（13 字段）：
 # SIM,t_ms,Roll×10,Pitch×10,Yaw×10,Gx×10,Gy×10,Gz×10,M1,M2,M3,M4,高度cm
-SIM_FIELDS = 13
+SIM_FIELDS = 16               # SIM + 12 数据 + 3 真实姿态
 SIM_IDX_M1 = 8
 SIM_MISS_MAX = 20             # 连续多少帧刷新没收到数据就判掉线（20×50ms≈1s）
 SIM_PLOT_H   = 170            # 仿真页每张图的最小高度（2×2 田字格）
 RC_SEND_MS   = 20             # 虚拟遥控发包周期（ms），固件 200ms 收不到就回中
+RC_KEY_STEP  = 8.0            # 键盘每 20ms 推多少杆量（−100→+100 满行程约 0.5s）
 
-# IMU 六面提示（物理朝向）
 FACE_TEXT = {
     1: "+Z 朝下（箭头面朝上,平放）",
     2: "-Z 朝下（箭头面朝下,倒扣）",
@@ -64,7 +64,7 @@ FACE_COLOR = "#4FC3F7"
 # 页面索引
 PAGE_DASHBOARD   = 0
 PAGE_CALIBRATION = 1
-PAGE_SIM         = 2          # 复用 .ui 里空的 page_config
+PAGE_SIM         = 2
 PAGE_HELP        = 3
 PAGE_ABOUT       = 4
 
@@ -76,21 +76,16 @@ SIM_COLOR = {
     "m4":    "#7bed9f", "alt":   "#dfe4ea",
 }
 
-
 def resource_path(relative_path: str) -> str:
     """获取资源绝对路径（兼容 PyInstaller 打包）"""
     if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
 
-
 UI_PATH = resource_path("FC Configurator.ui")
-
 
 # ---------------------------------------------------------------- 校准卡片
 class FaceIcon(QWidget):
-    """IMU 六面朝向的小板子示意图"""
-
     def __init__(self, face: int, parent=None):
         super().__init__(parent)
         self.face = face
@@ -198,22 +193,51 @@ class FaceTile(QFrame):
 # ---------------------------------------------------------------- 主窗口
 # ---------------------------------------------------------------- 虚拟摇杆
 class StickPad(QWidget):
-    """一格虚拟摇杆：拖拽输出 −100~100，松手按轴自回中"""
+    """一格虚拟摇杆：带刻度，鼠标拖拽或键盘都能控制"""
 
-    def __init__(self, spring_x: bool = True, spring_y: bool = True, parent=None):
+    PAD_W, PAD_H = 150, 150
+    MARGIN_L, MARGIN_R = 4, 4
+    MARGIN_T, MARGIN_B = 4, 4
+
+    def __init__(self, y_top: str, y_bottom: str, x_left: str, x_right: str,
+                 spring_x: bool = True, spring_y: bool = True, parent=None):
         super().__init__(parent)
         self.x = 0.0
         self.y = 0.0
         self.spring_x = spring_x
         self.spring_y = spring_y
-        self.setFixedSize(110, 110)
+        self.y_top = y_top
+        self.y_bottom = y_bottom
+        self.x_left = x_left
+        self.x_right = x_right
+
+        # 配色跟主题走，默认深色
+        self.c_bg     = QColor("#1a2332")
+        self.c_border = QColor("#2a3a4a")
+        self.c_text   = QColor("#8899a6")
+
+        self.setFixedSize(self.PAD_W, self.PAD_H)
+
+    def set_theme(self, bg: str, border: str, text: str):
+        self.c_bg     = QColor(bg)
+        self.c_border = QColor(border)
+        self.c_text   = QColor(text)
+        self.update()
+
+    def _area(self):
+        return QRectF(self.MARGIN_L, self.MARGIN_T,
+                      self.width() - self.MARGIN_L - self.MARGIN_R,
+                      self.height() - self.MARGIN_T - self.MARGIN_B)
+
+    def _to_pos(self):
+        a = self._area()
+        return (a.center().x() + self.x / 100.0 * (a.width() / 2.0 - 10.0),
+                a.center().y() + self.y / 100.0 * (a.height() / 2.0 - 10.0))
 
     def _set_from_pos(self, pos):
-        w = max(1, self.width() - 1)
-        h = max(1, self.height() - 1)
-
-        self.x = max(-100.0, min(100.0, (pos.x() / w * 2.0 - 1.0) * 100.0))
-        self.y = max(-100.0, min(100.0, (pos.y() / h * 2.0 - 1.0) * 100.0))
+        a = self._area()
+        self.x = max(-100.0, min(100.0, (pos.x() - a.center().x()) / (a.width() / 2.0 - 10.0) * 100.0))
+        self.y = max(-100.0, min(100.0, (pos.y() - a.center().y()) / (a.height() / 2.0 - 10.0) * 100.0))
         self.update()
 
     def mousePressEvent(self, event):
@@ -234,23 +258,23 @@ class StickPad(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
 
-        w = self.width() - 1
-        h = self.height() - 1
+        a = self._area()
 
-        painter.setPen(QPen(QColor("#3a4a5a"), 2))
-        painter.setBrush(QColor("#1a2332"))
-        painter.drawRoundedRect(1, 1, w - 2, h - 2, 10, 10)
+        # 摇杆区域（底色/边框跟主题）
+        painter.setPen(QPen(self.c_border, 2))
+        painter.setBrush(self.c_bg)
+        painter.drawRoundedRect(a, 8, 8)
 
-        painter.setPen(QPen(QColor("#2a3a4a"), 1))
-        painter.drawLine(int(w / 2), 4, int(w / 2), int(h) - 4)
-        painter.drawLine(4, int(h / 2), int(w) - 4, int(h / 2))
+        # 只有中间一横一竖
+        painter.setPen(QPen(self.c_border, 1))
+        painter.drawLine(QPointF(a.center().x(), a.top()), QPointF(a.center().x(), a.bottom()))
+        painter.drawLine(QPointF(a.left(), a.center().y()), QPointF(a.right(), a.center().y()))
 
-        cx = w / 2.0 + self.x / 100.0 * (w / 2.0 - 8.0)
-        cy = h / 2.0 + self.y / 100.0 * (h / 2.0 - 8.0)
-
-        painter.setPen(QPen(QColor("#00d4ff"), 2))
+        # 摇杆球
+        px, py = self._to_pos()
+        painter.setPen(QPen(QColor("#00d7ff"), 2))
         painter.setBrush(QColor("#0078d4"))
-        painter.drawEllipse(int(cx) - 15, int(cy) - 15, 30, 30)
+        painter.drawEllipse(QPointF(px, py), 12, 12)
 
 
 class MainWindow(QMainWindow):
@@ -281,6 +305,8 @@ class MainWindow(QMainWindow):
             key: deque([0.0] * DATA_LEN, maxlen=DATA_LEN)
             for key in SIM_COLOR
         }
+        for key in ("tr", "tp", "ty"):        # 模型真值（虚线对照）
+            self.sim_curves[key] = deque([0.0] * DATA_LEN, maxlen=DATA_LEN)
         self.sim_seq  = 0         # 收到的仿真帧数
         self.sim_seen = 0         # 上一帧刷新时看到的帧数
         self.sim_miss = SIM_MISS_MAX
@@ -301,9 +327,23 @@ class MainWindow(QMainWindow):
         self.rc_timer.timeout.connect(self._send_rc)
         self.rc_timer.start()
 
+        # --- 键盘控制左杆（W/S 油门，A/D 偏航）---
+        self.keys_down = set()
+
+        self.key_timer = QTimer(self)
+        self.key_timer.setInterval(20)
+        self.key_timer.timeout.connect(self._key_step)
+        self.key_timer.start()
+
+        QApplication.instance().installEventFilter(self)
+
         # --- 主题 ---
         self.settings = QSettings("FlightControl", "HostTool")
         self.current_theme = self.settings.value("theme", "light")
+
+        # --- 日志：打开就记，TX 杆量 / RX 固件回传 ---
+        self.log_file = None
+        self._open_log()
 
         # --- 信号绑定与初始化 ---
         self._bind_signals()
@@ -314,6 +354,24 @@ class MainWindow(QMainWindow):
         # --- 其他初始化 ---
         self.refresh_ports()
         self.apply_theme(self.current_theme)
+
+    # ============================================================ 日志
+    def _open_log(self):
+        """打开上位机就开始记录：TX=我发的杆量，RX=固件回传的姿态"""
+        name = time.strftime("sim_log_%Y%m%d_%H%M%S.csv")
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
+
+        try:
+            self.log_file = open(path, "w", encoding="utf-8", buffering=1)
+        except OSError:
+            self.log_file = None
+            return
+
+        self.log_file.write("# TX = 上位机发的杆量（油门0~1000，其余-100~100）\n")
+        self.log_file.write("# RX = 固件回传：估计姿态 / 机体系角速度 / 四路油门 / 高度 / 模型真值姿态\n")
+        self.log_file.write("# TX,pc_ms,thro,yaw,roll,pitch\n")
+        self.log_file.write("# RX,dev_ms,est_roll,est_pitch,est_yaw,gx,gy,gz,"
+                           "m1,m2,m3,m4,alt,true_roll,true_pitch,true_yaw\n")
 
     # ============================================================ 初始化
     def _set_window_icon(self):
@@ -347,7 +405,6 @@ class MainWindow(QMainWindow):
 
     # ============================================================ 仿真页
     def _build_simulation(self):
-        """复用 .ui 里空的 page_config，画姿态 / 角速度 / 油门三条曲线"""
         self.btn_config.setText("Simu")
 
         layout = QVBoxLayout(self.page_config)
@@ -357,65 +414,59 @@ class MainWindow(QMainWindow):
         info = QGridLayout()
         info.setSpacing(4)
 
-        self.sim_status = QLabel("仿真：等待固件数据…")
-        self.sim_values = QLabel("")
-
-        info.addWidget(self.sim_status, 0, 0)
-        info.addWidget(self.sim_values, 1, 0)
-
         # 美国手（Mode 2）：左杆油门+偏航，右杆俯仰+横滚
-        self.stick_left  = StickPad(spring_x=True, spring_y=False)   # 油门不回中
-        self.stick_right = StickPad(spring_x=True, spring_y=True)
+        self.stick_left  = StickPad("1000", "0", "−100", "+100",
+                                    spring_x=True, spring_y=False)   # 油门不回中
+        self.stick_right = StickPad("+100", "−100", "−100", "+100",
+                                    spring_x=True, spring_y=True)
         self.stick_left.y = 100.0                                    # 初始油门打到底
 
-        self.sim_stick_label = QLabel("")
-        self.sim_stick_label.setMinimumWidth(220)
-
-        self.sim_hint = QLabel("")
-        self.sim_hint.setStyleSheet("color: #ffa502;")
-
         sticks = QHBoxLayout()
-        sticks.setSpacing(12)
+        sticks.setSpacing(10)
+
+        cap_font = "font-size: 9pt;"
 
         left_box = QVBoxLayout()
         left_box.setSpacing(0)
-        cap_left = QLabel("左杆 油门↑↓ / 偏航←→")
-        cap_left.setStyleSheet("font-size: 9pt;")
+        cap_left = QLabel("左摇杆")
+        cap_left.setAlignment(Qt.AlignCenter)
+        cap_left.setStyleSheet(cap_font)
         left_box.addWidget(cap_left)
         left_box.addWidget(self.stick_left)
 
         right_box = QVBoxLayout()
         right_box.setSpacing(0)
-        cap_right = QLabel("右杆 俯仰↑↓ / 横滚←→")
-        cap_right.setStyleSheet("font-size: 9pt;")
+        cap_right = QLabel("右摇杆")
+        cap_right.setAlignment(Qt.AlignCenter)
+        cap_right.setStyleSheet(cap_font)
         right_box.addWidget(cap_right)
         right_box.addWidget(self.stick_right)
 
         sticks.addLayout(left_box)
         sticks.addLayout(right_box)
-
-        info_box = QVBoxLayout()
-        info_box.setSpacing(2)
-        info_box.addWidget(self.sim_stick_label)
-        info_box.addWidget(self.sim_hint)
-        info_box.addStretch(1)
-        sticks.addLayout(info_box)
-
         sticks.addStretch(1)
 
-        layout.addLayout(sticks)
-        layout.addLayout(info)
+        self.sim_ahi = AttitudeIndicator()
+        self.sim_ahi.setFixedWidth(310)          # 和两个摇杆的总宽（150+10+150）对齐
+        self.sim_ahi.setMinimumHeight(310)
+        self.sim_ahi.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.sim_ahi.align_top = True            # 圆盘贴顶，底色铺到底和右边的表对齐
+
+        left_col = QVBoxLayout()
+        left_col.setSpacing(6)
+        left_col.addLayout(sticks)
+        left_col.addWidget(self.sim_ahi, 1)
 
         self.sim_att_plot = self._make_sim_plot("姿态", -180, 180)
-        self.sim_gyr_plot = self._make_sim_plot("角速度", -600, 600)
+        self.sim_gyr_plot = self._make_sim_plot("角速度", -250, 250)
         self.sim_thr_plot = self._make_sim_plot("油门", 0, 1000)
-        self.sim_alt_plot = self._make_sim_plot("高度", 0, 250)
+        self.sim_alt_plot = self._make_sim_plot("高度", 0, 1000)
 
         self.sim_plots = (
             (self.sim_att_plot, -180, 180),
-            (self.sim_gyr_plot, -600, 600),
+            (self.sim_gyr_plot, -250, 250),
             (self.sim_thr_plot,    0, 1000),
-            (self.sim_alt_plot,    0, 250),
+            (self.sim_alt_plot,    0, 1000),
         )
 
         for plot, y_min, y_max in self.sim_plots:
@@ -428,16 +479,27 @@ class MainWindow(QMainWindow):
         grid.addWidget(self.sim_gyr_plot, 0, 1)
         grid.addWidget(self.sim_thr_plot, 1, 0)
         grid.addWidget(self.sim_alt_plot, 1, 1)
-        layout.addLayout(grid, 1)
+
+        # 左边摇杆+姿态球，右边四张图
+        body = QHBoxLayout()
+        body.setSpacing(10)
+        body.addLayout(left_col)
+        body.addLayout(grid, 1)
+        layout.addLayout(body, 1)
 
         # 曲线加完之后再锁一次横轴：addCurve 会把自动量程重新打开
         for plot, y_min, y_max in self.sim_plots:
             plot.setXRange(0, DATA_LEN - 1, padding=0)
 
         self.sim_curve = {
-            "roll":  self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["roll"],  width=2), name="Roll"),
-            "pitch": self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["pitch"], width=2), name="Pitch"),
-            "yaw":   self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["yaw"],   width=2), name="Yaw"),
+            "roll":  self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["roll"],  width=2), name="Roll 估计"),
+            "pitch": self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["pitch"], width=2), name="Pitch 估计"),
+            "yaw":   self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["yaw"],   width=2), name="Yaw 估计"),
+
+            # 模型真值：虚线，和估计值对照（估计值漂没漂一眼看出来）
+            "tr":    self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["roll"],  width=1, style=Qt.DashLine), name="Roll 真值"),
+            "tp":    self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["pitch"], width=1, style=Qt.DashLine), name="Pitch 真值"),
+            "ty":    self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["yaw"],   width=1, style=Qt.DashLine), name="Yaw 真值"),
 
             "gx":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gx"], width=2), name="Gx"),
             "gy":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gy"], width=2), name="Gy"),
@@ -451,8 +513,6 @@ class MainWindow(QMainWindow):
             "alt":   self.sim_alt_plot.plot(pen=pg.mkPen(SIM_COLOR["alt"], width=2), name="高度"),
         }
 
-        # 曲线加完之后再锁一次量程：addCurve / setData 会把自动量程重新打开，
-        # 不锁的话平坦段的小抖动（±0.1°/s、±3‰）会被放大成满屏锯齿
         for plot, y_min, y_max in self.sim_plots:
             plot.setYRange(y_min, y_max, padding=0)
             plot.setXRange(0, DATA_LEN - 1, padding=0)
@@ -485,6 +545,9 @@ class MainWindow(QMainWindow):
                 "m3":    int(parts[SIM_IDX_M1 + 2]),
                 "m4":    int(parts[SIM_IDX_M1 + 3]),
                 "alt":   int(parts[12]),
+                "tr":    int(parts[13]) / 10.0,
+                "tp":    int(parts[14]) / 10.0,
+                "ty":    int(parts[15]) / 10.0,
             }
         except (ValueError, IndexError):
             return
@@ -492,6 +555,16 @@ class MainWindow(QMainWindow):
         self.sim_latest.update(data)
         for key in SIM_COLOR:
             self.sim_curves[key].append(float(data[key]))
+        for key in ("tr", "tp", "ty"):
+            self.sim_curves[key].append(float(data[key]))
+
+        if self.log_file is not None:
+            self.log_file.write(
+                "RX,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%.1f,%.1f,%.1f\n"
+                % (data["t"], data["roll"], data["pitch"], data["yaw"],
+                   data["gx"], data["gy"], data["gz"],
+                   data["m1"], data["m2"], data["m3"], data["m4"], data["alt"],
+                   data["tr"], data["tp"], data["ty"]))
 
         self.sim_seq += 1
 
@@ -502,9 +575,9 @@ class MainWindow(QMainWindow):
         Roll  = self.stick_right.x
         Pitch = self.stick_right.y
 
-        self.sim_stick_label.setText(
-            f"油门 {Thro:4.0f}‰   偏航 {Yaw:+4.0f}%\n"
-            f"俯仰 {Pitch:+4.0f}%   横滚 {Roll:+4.0f}%")
+        if self.log_file is not None:
+            self.log_file.write("TX,%d,%.0f,%.0f,%.0f,%.0f\n"
+                                % (int(time.monotonic() * 1000), Thro, Yaw, Roll, Pitch))
 
         if self.serial_thread is None or self.serial_thread.ser is None:
             return
@@ -523,25 +596,14 @@ class MainWindow(QMainWindow):
             self.sim_miss += 1
 
         if self.sim_miss >= SIM_MISS_MAX:
-            self.sim_status.setText("仿真：无数据（检查固件 USE_SIM 与串口）")
-            return
+            return                      # 掉线就不刷了
 
         if self.stackedWidget.currentIndex() != PAGE_SIM:
             return                      # 不在仿真页就不用刷曲线
 
         d = self.sim_latest
 
-        if d["alt"] <= 2 and max(d["m1"], d["m2"], d["m3"], d["m4"]) < 400:
-            self.sim_hint.setText("油门不足，未离地：左杆推到 45% 左右（约 446‰）才能悬停")
-        else:
-            self.sim_hint.setText("")
-
-        self.sim_status.setText(f"仿真：运行中  t={d['t']}ms")
-        self.sim_values.setText(
-            f"姿态 {d['roll']:+.1f} / {d['pitch']:+.1f} / {d['yaw']:+.1f}°   "
-            f"角速度 {d['gx']:+.0f} / {d['gy']:+.0f} / {d['gz']:+.0f}°/s   "
-            f"油门 {d['m1']} / {d['m2']} / {d['m3']} / {d['m4']}‰   高度 {d['alt']:.1f}cm"
-        )
+        self.sim_ahi.set_attitude(d["roll"], d["pitch"], d["yaw"])
 
         for key, curve in self.sim_curve.items():
             curve.setData(list(self.sim_curves[key]))
@@ -559,7 +621,42 @@ class MainWindow(QMainWindow):
     def eventFilter(self, obj, event):
         if obj is self.plot_frame and event.type() == QEvent.Resize:
             self._place_hint()
+
+        # 仿真页吃掉 W/S/A/D，驱动左杆（其他页面不拦，免得影响别处输入）
+        if event.type() in (QEvent.KeyPress, QEvent.KeyRelease) and not event.isAutoRepeat():
+            if self.stackedWidget.currentIndex() == PAGE_SIM:
+                if event.type() == QEvent.KeyPress:
+                    self.keys_down.add(event.key())
+                    return True
+
+                if event.key() in self.keys_down:
+                    self.keys_down.discard(event.key())
+                    if event.key() in (Qt.Key_A, Qt.Key_D):
+                        self.stick_left.x = 0.0        # 偏航自回中
+                        self.stick_left.update()
+                    return True
+
         return super().eventFilter(obj, event)
+
+    def _key_step(self):
+        """键盘按住时连续推动左杆"""
+        if not self.keys_down or self.stackedWidget.currentIndex() != PAGE_SIM:
+            return
+
+        stick = self.stick_left
+        moved = False
+
+        if Qt.Key_W in self.keys_down:
+            stick.y = max(-100.0, stick.y - RC_KEY_STEP); moved = True
+        if Qt.Key_S in self.keys_down:
+            stick.y = min(100.0, stick.y + RC_KEY_STEP); moved = True
+        if Qt.Key_A in self.keys_down:
+            stick.x = max(-100.0, stick.x - RC_KEY_STEP); moved = True
+        if Qt.Key_D in self.keys_down:
+            stick.x = min(100.0, stick.x + RC_KEY_STEP); moved = True
+
+        if moved:
+            stick.update()
 
     def _bind_signals(self):
         self.theme_button.clicked.connect(self.toggle_theme)
@@ -1013,6 +1110,12 @@ class MainWindow(QMainWindow):
                 plot.plotItem.legend.setLabelTextColor(t["plot_text"])
 
         self.ahi.set_colors(bg=t["plot_bg"], border=t["plot_grid"], text=t["plot_text"])
+
+        # 仿真页：姿态球配色 + 摇杆底色跟主题
+        self.sim_ahi.set_colors(bg=t["plot_bg"], border=t["plot_grid"], text=t["plot_text"])
+        for pad in (self.stick_left, self.stick_right):
+            pad.set_theme(t["plot_bg"], t["plot_grid"], t["plot_text"])
+
         self.theme_button.setText("☀" if theme_name == "light" else "🌙")
         
         # 刷新导航按钮颜色
@@ -1194,6 +1297,10 @@ class MainWindow(QMainWindow):
 
     # ============================================================ 退出
     def closeEvent(self, event):
+        if self.log_file is not None:
+            self.log_file.close()
+            self.log_file = None
+
         if self.serial_thread is not None:
             self.serial_thread.stop()
             self.serial_thread = None

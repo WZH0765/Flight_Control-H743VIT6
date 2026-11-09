@@ -19,6 +19,8 @@ class AttitudeIndicator(QWidget):
         self.accent_color = QColor("#00d4ff")   # 中心飞机
         self.yaw_color    = QColor("#ff4757")   # Yaw 指针
 
+        self.align_top = False                  # True = 圆盘贴顶画，底色铺满整个控件
+
     def set_attitude(self, roll, pitch, yaw):
         self.roll  = roll
         self.pitch = pitch
@@ -39,6 +41,9 @@ class AttitudeIndicator(QWidget):
         size = min(w, h)
         cx, cy = w / 2, h / 2
         R = size / 2 - 8
+
+        if self.align_top:
+            cy = R + 8                          # 圆盘贴顶，底色照样铺满整块
 
         # 背景
         p.fillRect(0, 0, w, h, self.bg_color)
