@@ -9,7 +9,6 @@
 #include "Simulator.h"
 
 extern float SetThro;
-extern fltstate_e State;
 
 uint16_t SimuThro[4];           //模拟量油门（0~1000）
 
@@ -57,7 +56,7 @@ void Simulator_Init(void)
     IMU_CalValid = false;       //合成数据不能再被零偏/刻度修正
     MAG_CalValid = false;
 
-    State   = ARM;
+    State   = DISARM;           //上电不解锁，等上位机发 arm,1
     SetThro = 0.0f;             //定高模式下它现在是"目标高度比例"，0 = 停在地面等摇杆
     printf("SIM,start\r\n");
 }

@@ -8,16 +8,15 @@
 #include "SysTime.h"
 #include "hardware.h"
 
-float SetThro = 0.0f;
-float SetYawRate = 0.0f;
+float SetRoll;              //遥控器(模拟器)设定Roll
+float SetPitch;             //遥控器(模拟器)设定Pitch
+float SetThro = 0.0f;       //遥控器(模拟器)设定Throttle
+float SetYawRate = 0.0f;    //遥控器(模拟器)设定Yaw角速度
 
 pid_t PID_YawRate;          //Yaw   角速度环
 pid_t PID_RollRate;         //Roll  角速度环
 pid_t PID_PitchRate;        //Pitch 角速度环
 fltstate_e State = DISARM;
-
-static float Stk_Roll;
-static float Stk_Pitch;
 
 static const float Kp[3] = {0.0053f,0.0040f,0.0040f};
 static const float Ki[3] = {0.0027f,0.0013f,0.0013f};
@@ -38,12 +37,12 @@ const float Mix_Table[4][3] =
 
 void Flight_Init(void)
 {
-    SetThro = 0.0f;
     State = DISARM;
+    SetThro = 0.0f;
+    SetRoll  = 0.0f;
+    SetPitch = 0.0f;
 
-    Stk_Roll   = 0.0f;
-    Stk_Pitch  = 0.0f;
-
+    Height_Init();
     PID_Init(&PID_YawRate  ,Kp[0],Ki[0],Kd[0]);
     PID_Init(&PID_RollRate ,Kp[1],Ki[1],Kd[1]);
     PID_Init(&PID_PitchRate,Kp[2],Ki[2],Kd[2]);
@@ -57,17 +56,21 @@ void Flight_Init(void)
 void Flight_Stick(float Thro,float Yaw,float Roll,float Pitch)
 {
     SetThro = fmaxf(0.0f,fminf(1000.0f,Thro));
-
-    Stk_Roll  = fmaxf(-100.0f,fminf(100.0f,Roll ));
-    Stk_Pitch = fmaxf(-100.0f,fminf(100.0f,Pitch));
-
+    SetRoll  = fmaxf(-100.0f,fminf(100.0f,Roll));
+    SetPitch = fmaxf(-100.0f,fminf(100.0f,Pitch));
     SetYawRate = fmaxf(-100.0f,fminf(100.0f,Yaw))*RC_RATE_MAX/100.0f;
 }
 
 void Flight_Update(float Gx,float Gy,float Gz,float dt)
 {
-    float RollSp  = Stk_Roll *ANGLE_MAX/RAD_TO_DEG/100.0f;
-    float PitchSp = Stk_Pitch*ANGLE_MAX/RAD_TO_DEG/100.0f;
+    if(State != ARM)
+    {
+        Motor_Stop();
+        return;
+    }
+
+    float RollSp  = SetRoll *ANGLE_MAX/RAD_TO_DEG/100.0f;
+    float PitchSp = SetPitch*ANGLE_MAX/RAD_TO_DEG/100.0f;
 
     float RateSp[3];
     RateSp[0] = SetYawRate;

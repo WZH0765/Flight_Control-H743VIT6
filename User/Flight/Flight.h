@@ -9,7 +9,6 @@
 #define ANGLE_MAX     35.0f     //自稳模式满杆倾角（°）
 #define RAD_TO_DEG    57.29578f
 #define RC_RATE_MAX   200.0f    //满杆角速度（°/s）
-#define RC_TIMEOUT_MS 200       //遥控超时就回中
 
 typedef enum
 {
@@ -18,6 +17,8 @@ typedef enum
     FAILSAFE = 2         //故障
 
 } fltstate_e;
+
+extern fltstate_e State;
 
 void Flight_Init(void);
 void Flight_Update(float Gx,float Gy,float Gz,float dt);

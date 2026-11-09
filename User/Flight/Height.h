@@ -1,9 +1,9 @@
 #pragma once
 
-#define ALT_CENTER    500.0f    //杆量中位（自动回中，定高）
+#define ALT_ISA_K     0.190295f
+#define ALT_CENTER    500.0f    //杆量中位（摇杆自动回中，中位=定高）
 #define ALT_DEADBAND  20.0f     //中位附近这点死区不算，免得抖
 #define ALT_VZ_MAX    60.0f     //满偏升降速度（cm/s）
-#define ALT_CLIMB     990.0f    //满杆判定（‰）：到这儿油门直接顶满，不再走高度环
 #define ALT_MAX_UP    500.0f    //目标高度上限（cm）
 #define ALT_IDLE      50.0f     //落地的电机怠速（‰）
 #define ALT_HOVER     421.0f    //悬停基准油门（‰），真机要按实际重量标定
@@ -16,4 +16,8 @@
 #define ALT_LP_ALT    0.15f     //高度低通（s），气压计噪声大
 #define ALT_LP_RATE   0.05f     //升降速度低通（s）
 
+#define LPF(Now,Last,Tau,dt)    ((Last) + ((Now) - (Last))*((dt)/((Tau) + (dt))))   //一阶低通
+#define CLAMP(Val,Limit)        (fmaxf(-(Limit),fminf((Limit),(Val))))              //对称限幅
+
+void Height_Init(void);
 float Height_Update(float StickThro,float dt);   //返回总油门（‰）

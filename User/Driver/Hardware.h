@@ -1,9 +1,9 @@
 #pragma once
 
+#include "Bus.h"
+#include "Health.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include "Health.h"
-#include "Bus.h"
 
 /****************** 选择使用的硬件 ******************/
 
@@ -20,7 +20,6 @@
 #define USE_GPS
 
 /****************** 板级量程换算 ******************/
-
 #define ACC_SCALE   (2048.0f)               //±16g
 #define GYR_SCALE   (16.4f/0.0174533f)      //±2000dps
 #define GRAVITY     (9.80665f)              //标准重力加速度

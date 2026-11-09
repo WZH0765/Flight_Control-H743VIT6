@@ -1,13 +1,13 @@
 #pragma once
+
 #include <stdint.h>
 #include <stdbool.h>
 
-#define KP_ACC          0.5f        //加速度计修正增益：越小越"信陀螺"，机动时不被阻力/惯性力带偏
-#define KI_ACC          0.0f
-#define KP_MAG          0.1f
-#define KI_MAG          0.0f
-#define GRAVITY_G       9.80665f    //标准重力（m/s²）
-#define ACC_TRUST_BAND  0.3f        //|A| 偏离重力超过这个值（m/s²）就认为在机动
+#define KP_ACC    0.5f
+#define KI_ACC    0.0f
+#define KP_MAG    0.1f
+#define KI_MAG    0.0f
+#define ACC_TRUST 0.3f
 
 typedef struct
 {

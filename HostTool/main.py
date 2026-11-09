@@ -8,7 +8,7 @@ from PyQt5.QtCore import Qt, QTimer, QSettings, QPointF, QEvent, QRectF
 from PyQt5.QtGui import QIcon, QPainter, QColor, QPen, QPolygonF
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QMessageBox,
-    QFrame, QLabel, QGridLayout, QSizePolicy, QWidget,
+    QFrame, QLabel, QGridLayout, QSizePolicy, QWidget, QPushButton,
 )
 from PyQt5 import uic
 
@@ -458,6 +458,14 @@ class MainWindow(QMainWindow):
         body.setSpacing(10)
         body.addLayout(left_col)
         body.addLayout(grid, 1)
+
+        # 解锁按钮：上电默认上锁，点一下才给电调输出
+        self.arm_button = QPushButton("解锁")
+        self.arm_button.setCheckable(True)
+        self.arm_button.setFixedHeight(30)
+        self.arm_button.clicked.connect(self._on_arm_clicked)
+
+        layout.addWidget(self.arm_button)
         layout.addLayout(body, 1)
 
         # 曲线加完之后再锁一次横轴：addCurve 会把自动量程重新打开
@@ -536,6 +544,20 @@ class MainWindow(QMainWindow):
         try:
             self.serial_thread.ser.write(
                 f"rc,{Thro:.0f},{Yaw:.0f},{Roll:.0f},{Pitch:.0f}\n".encode())
+        except Exception:
+            pass
+
+    def _on_arm_clicked(self):
+        """解锁/上锁按钮：点一下发一次 arm,<0|1>"""
+        Arm = 1 if self.arm_button.isChecked() else 0
+
+        self.arm_button.setText("上锁" if Arm else "解锁")
+
+        if self.serial_thread is None or self.serial_thread.ser is None:
+            return
+
+        try:
+            self.serial_thread.ser.write(f"arm,{Arm}\n".encode())
         except Exception:
             pass
 

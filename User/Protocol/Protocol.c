@@ -69,6 +69,18 @@ void Prot_Process(char *Cmd)
     }
 #endif
 
+    /*解锁/上锁：先重跑 Flight_Init() 清油门、杆量、积分、定高状态，再决定 Status*/
+    if(strcmp(Name,"ARM") == 0)
+    {
+        sscanf(Cmd,"%*s %d",&Val[0]);
+
+        Flight_Init();
+
+        if(Val[0] != 0) State = ARM;        //Flight_Init() 里已经置 DISARM
+
+        return;
+    }
+
     if(strcmp(Name,"CAL") == 0)
     {
 /*校准参数加载*/

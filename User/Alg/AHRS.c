@@ -1,5 +1,6 @@
 #include "AHRS.h"
 #include <math.h>
+#include "Hardware.h"
 
 /******************
 *    算法物理坐标-标准NED
@@ -25,7 +26,7 @@ static float q0 = 1.0f,q1 = 0.0f,q2 = 0.0f,q3 = 0.0f;
 void AHRS_Update(float Ax,float Ay,float Az,float Gx,float Gy,float Gz,float Mx,float My,float Mz,float dt)
 {
     float An = sqrtf(Ax*Ax + Ay*Ay + Az*Az);
-    if(An > 0.01f && fabsf(An - GRAVITY_G) < ACC_TRUST_BAND)
+    if(An > 0.01f && fabsf(An - GRAVITY) < ACC_TRUST)
     {
         Ax /= An; Ay /= An; Az /= An;
         float A_vx = -2.0f*(q1*q3 - q0*q2);
