@@ -1,6 +1,5 @@
 import sys
 import os
-import time
 from collections import deque
 
 import serial.tools.list_ports
@@ -34,7 +33,7 @@ PROTOCOL_FIELDS = 12
 
 # 仿真协议（13 字段）：
 # SIM,t_ms,Roll×10,Pitch×10,Yaw×10,Gx×10,Gy×10,Gz×10,M1,M2,M3,M4,高度cm
-SIM_FIELDS = 16               # SIM + 12 数据 + 3 真实姿态
+SIM_FIELDS = 13
 SIM_IDX_M1 = 8
 SIM_MISS_MAX = 20             # 连续多少帧刷新没收到数据就判掉线（20×50ms≈1s）
 SIM_PLOT_H   = 170            # 仿真页每张图的最小高度（2×2 田字格）
@@ -193,8 +192,6 @@ class FaceTile(QFrame):
 # ---------------------------------------------------------------- 主窗口
 # ---------------------------------------------------------------- 虚拟摇杆
 class StickPad(QWidget):
-    """一格虚拟摇杆：带刻度，鼠标拖拽或键盘都能控制"""
-
     PAD_W, PAD_H = 150, 150
     MARGIN_L, MARGIN_R = 4, 4
     MARGIN_T, MARGIN_B = 4, 4
@@ -305,8 +302,6 @@ class MainWindow(QMainWindow):
             key: deque([0.0] * DATA_LEN, maxlen=DATA_LEN)
             for key in SIM_COLOR
         }
-        for key in ("tr", "tp", "ty"):        # 模型真值（虚线对照）
-            self.sim_curves[key] = deque([0.0] * DATA_LEN, maxlen=DATA_LEN)
         self.sim_seq  = 0         # 收到的仿真帧数
         self.sim_seen = 0         # 上一帧刷新时看到的帧数
         self.sim_miss = SIM_MISS_MAX
@@ -341,10 +336,6 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("FlightControl", "HostTool")
         self.current_theme = self.settings.value("theme", "light")
 
-        # --- 日志：打开就记，TX 杆量 / RX 固件回传 ---
-        self.log_file = None
-        self._open_log()
-
         # --- 信号绑定与初始化 ---
         self._bind_signals()
         self._init_navigation()
@@ -354,24 +345,6 @@ class MainWindow(QMainWindow):
         # --- 其他初始化 ---
         self.refresh_ports()
         self.apply_theme(self.current_theme)
-
-    # ============================================================ 日志
-    def _open_log(self):
-        """打开上位机就开始记录：TX=我发的杆量，RX=固件回传的姿态"""
-        name = time.strftime("sim_log_%Y%m%d_%H%M%S.csv")
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
-
-        try:
-            self.log_file = open(path, "w", encoding="utf-8", buffering=1)
-        except OSError:
-            self.log_file = None
-            return
-
-        self.log_file.write("# TX = 上位机发的杆量（油门0~1000，其余-100~100）\n")
-        self.log_file.write("# RX = 固件回传：估计姿态 / 机体系角速度 / 四路油门 / 高度 / 模型真值姿态\n")
-        self.log_file.write("# TX,pc_ms,thro,yaw,roll,pitch\n")
-        self.log_file.write("# RX,dev_ms,est_roll,est_pitch,est_yaw,gx,gy,gz,"
-                           "m1,m2,m3,m4,alt,true_roll,true_pitch,true_yaw\n")
 
     # ============================================================ 初始化
     def _set_window_icon(self):
@@ -416,10 +389,10 @@ class MainWindow(QMainWindow):
 
         # 美国手（Mode 2）：左杆油门+偏航，右杆俯仰+横滚
         self.stick_left  = StickPad("1000", "0", "−100", "+100",
-                                    spring_x=True, spring_y=False)   # 油门不回中
+                                    spring_x=True, spring_y=True)    # 油门杆也回中（中位=定高）
         self.stick_right = StickPad("+100", "−100", "−100", "+100",
                                     spring_x=True, spring_y=True)
-        self.stick_left.y = 100.0                                    # 初始油门打到底
+        self.stick_left.y = 0.0                                      # 初始居中 = 定高
 
         sticks = QHBoxLayout()
         sticks.setSpacing(10)
@@ -492,14 +465,9 @@ class MainWindow(QMainWindow):
             plot.setXRange(0, DATA_LEN - 1, padding=0)
 
         self.sim_curve = {
-            "roll":  self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["roll"],  width=2), name="Roll 估计"),
-            "pitch": self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["pitch"], width=2), name="Pitch 估计"),
-            "yaw":   self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["yaw"],   width=2), name="Yaw 估计"),
-
-            # 模型真值：虚线，和估计值对照（估计值漂没漂一眼看出来）
-            "tr":    self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["roll"],  width=1, style=Qt.DashLine), name="Roll 真值"),
-            "tp":    self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["pitch"], width=1, style=Qt.DashLine), name="Pitch 真值"),
-            "ty":    self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["yaw"],   width=1, style=Qt.DashLine), name="Yaw 真值"),
+            "roll":  self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["roll"],  width=2), name="Roll"),
+            "pitch": self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["pitch"], width=2), name="Pitch"),
+            "yaw":   self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["yaw"],   width=2), name="Yaw"),
 
             "gx":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gx"], width=2), name="Gx"),
             "gy":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gy"], width=2), name="Gy"),
@@ -545,9 +513,6 @@ class MainWindow(QMainWindow):
                 "m3":    int(parts[SIM_IDX_M1 + 2]),
                 "m4":    int(parts[SIM_IDX_M1 + 3]),
                 "alt":   int(parts[12]),
-                "tr":    int(parts[13]) / 10.0,
-                "tp":    int(parts[14]) / 10.0,
-                "ty":    int(parts[15]) / 10.0,
             }
         except (ValueError, IndexError):
             return
@@ -555,16 +520,6 @@ class MainWindow(QMainWindow):
         self.sim_latest.update(data)
         for key in SIM_COLOR:
             self.sim_curves[key].append(float(data[key]))
-        for key in ("tr", "tp", "ty"):
-            self.sim_curves[key].append(float(data[key]))
-
-        if self.log_file is not None:
-            self.log_file.write(
-                "RX,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%.1f,%.1f,%.1f\n"
-                % (data["t"], data["roll"], data["pitch"], data["yaw"],
-                   data["gx"], data["gy"], data["gz"],
-                   data["m1"], data["m2"], data["m3"], data["m4"], data["alt"],
-                   data["tr"], data["tp"], data["ty"]))
 
         self.sim_seq += 1
 
@@ -574,10 +529,6 @@ class MainWindow(QMainWindow):
         Yaw   = self.stick_left.x
         Roll  = self.stick_right.x
         Pitch = self.stick_right.y
-
-        if self.log_file is not None:
-            self.log_file.write("TX,%d,%.0f,%.0f,%.0f,%.0f\n"
-                                % (int(time.monotonic() * 1000), Thro, Yaw, Roll, Pitch))
 
         if self.serial_thread is None or self.serial_thread.ser is None:
             return
@@ -622,7 +573,7 @@ class MainWindow(QMainWindow):
         if obj is self.plot_frame and event.type() == QEvent.Resize:
             self._place_hint()
 
-        # 仿真页吃掉 W/S/A/D，驱动左杆（其他页面不拦，免得影响别处输入）
+        # 仿真页吃掉 WASD 和方向键，驱动两个摇杆（其他页面不拦，免得影响别处输入）
         if event.type() in (QEvent.KeyPress, QEvent.KeyRelease) and not event.isAutoRepeat():
             if self.stackedWidget.currentIndex() == PAGE_SIM:
                 if event.type() == QEvent.KeyPress:
@@ -631,32 +582,52 @@ class MainWindow(QMainWindow):
 
                 if event.key() in self.keys_down:
                     self.keys_down.discard(event.key())
-                    if event.key() in (Qt.Key_A, Qt.Key_D):
-                        self.stick_left.x = 0.0        # 偏航自回中
+
+                    if event.key() in (Qt.Key_W, Qt.Key_S):         # 高度自回中（中位=定高）
+                        self.stick_left.y = 0.0
                         self.stick_left.update()
+                    if event.key() in (Qt.Key_A, Qt.Key_D):         # 偏航自回中
+                        self.stick_left.x = 0.0
+                        self.stick_left.update()
+                    if event.key() in (Qt.Key_Up, Qt.Key_Down):     # 俯仰自回中
+                        self.stick_right.y = 0.0
+                        self.stick_right.update()
+                    if event.key() in (Qt.Key_Left, Qt.Key_Right):  # 横滚自回中
+                        self.stick_right.x = 0.0
+                        self.stick_right.update()
                     return True
 
         return super().eventFilter(obj, event)
 
     def _key_step(self):
-        """键盘按住时连续推动左杆"""
         if not self.keys_down or self.stackedWidget.currentIndex() != PAGE_SIM:
             return
 
-        stick = self.stick_left
+        left  = self.stick_left
+        right = self.stick_right
         moved = False
 
         if Qt.Key_W in self.keys_down:
-            stick.y = max(-100.0, stick.y - RC_KEY_STEP); moved = True
+            left.y = max(-100.0, left.y - RC_KEY_STEP); moved = True
         if Qt.Key_S in self.keys_down:
-            stick.y = min(100.0, stick.y + RC_KEY_STEP); moved = True
+            left.y = min(100.0, left.y + RC_KEY_STEP); moved = True
         if Qt.Key_A in self.keys_down:
-            stick.x = max(-100.0, stick.x - RC_KEY_STEP); moved = True
+            left.x = max(-100.0, left.x - RC_KEY_STEP); moved = True
         if Qt.Key_D in self.keys_down:
-            stick.x = min(100.0, stick.x + RC_KEY_STEP); moved = True
+            left.x = min(100.0, left.x + RC_KEY_STEP); moved = True
+
+        if Qt.Key_Up in self.keys_down:                 # ↑ 低头前飞
+            right.y = max(-100.0, right.y - RC_KEY_STEP); moved = True
+        if Qt.Key_Down in self.keys_down:               # ↓ 抬头
+            right.y = min(100.0, right.y + RC_KEY_STEP); moved = True
+        if Qt.Key_Left in self.keys_down:
+            right.x = max(-100.0, right.x - RC_KEY_STEP); moved = True
+        if Qt.Key_Right in self.keys_down:
+            right.x = min(100.0, right.x + RC_KEY_STEP); moved = True
 
         if moved:
-            stick.update()
+            left.update()
+            right.update()
 
     def _bind_signals(self):
         self.theme_button.clicked.connect(self.toggle_theme)
@@ -678,7 +649,6 @@ class MainWindow(QMainWindow):
         self._switch_page(PAGE_DASHBOARD)
 
     def _switch_page(self, index: int):
-        """切换页面 + 直接控制导航按钮颜色（不影响其他按钮）"""
         self.stackedWidget.setCurrentIndex(index)
         
         t = THEMES[self.current_theme]
@@ -1297,10 +1267,6 @@ class MainWindow(QMainWindow):
 
     # ============================================================ 退出
     def closeEvent(self, event):
-        if self.log_file is not None:
-            self.log_file.close()
-            self.log_file = None
-
         if self.serial_thread is not None:
             self.serial_thread.stop()
             self.serial_thread = None

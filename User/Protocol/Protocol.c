@@ -67,25 +67,26 @@ void Prot_Process(char *Cmd)
         Flight_Stick((float)Val[0],(float)Val[1],(float)Val[2],(float)Val[3]);
         return;
     }
-
-    if(strcmp(Name,"CAL") != 0) return;
 #endif
 
-/*校准参数加载*/
-    if(strcmp(Arg1,"STATUS") == 0)
+    if(strcmp(Name,"CAL") == 0)
     {
-        printf("CAL,STATUS,IMU=%d,MAG=%d\r\n",IMU_CalValid ? 1 : 0,MAG_CalValid ? 1 : 0);
-        return;
-    }
+/*校准参数加载*/
+        if(strcmp(Arg1,"STATUS") == 0)
+        {
+            printf("CAL,STATUS,IMU=%d,MAG=%d\r\n",IMU_CalValid ? 1 : 0,MAG_CalValid ? 1 : 0);
+            return;
+        }
 
 /*校准外设选择*/
-    if(strcmp(Arg1,"IMU") == 0) Sensor = IMU;
-    else if(strcmp(Arg1,"MAG") == 0) Sensor = MAG;
-    else return;
+        if(strcmp(Arg1,"IMU") == 0) Sensor = IMU;
+        else if(strcmp(Arg1,"MAG") == 0) Sensor = MAG;
+        else return;
 
 /*校准开始&终止*/
-    if(strcmp(Arg2,"ABORT") == 0) Cal_Abort();
-    else if(strcmp(Arg2,"START") == 0 || strcmp(Arg2,"NEXT") == 0) Cal_Start(Sensor);
+        if(strcmp(Arg2,"ABORT") == 0) Cal_Abort();
+        else if(strcmp(Arg2,"START") == 0 || strcmp(Arg2,"NEXT") == 0) Cal_Start(Sensor);
+    }
 }
 
 /***************
