@@ -51,6 +51,12 @@ float Height_Update(float SetThro,float dt)
     Speed_Z = (fabsf(Dir) < DEADBAND) ? 0.0f : Dir/500.0f*MAX_VZ;
     SetAlt  = fminf(SetAlt + Speed_Z*dt,MAX_UP);
 
+    if(SetAlt < 2.0f && ActAlt < 5.0f && Speed_Z <= 0.0f)
+    {
+        SetAlt = 0.0f;
+        return IDLE_THRO;
+    }
+
     float Out = HOVER_THRO + Speed_Z*ALT_FF + ALT_KP*CLAMP(SetAlt - ActAlt,ALT_ERR_MAX) - ALT_KD*CLAMP(Rate_Z - Speed_Z,ALT_RATE_MAX);
     LastThro += CLAMP(Out - LastThro,ALT_SLEW*dt);
 

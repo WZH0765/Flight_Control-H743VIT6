@@ -1,7 +1,7 @@
 import math
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtGui import QPainter, QColor, QPen, QPainterPath
-from PyQt5.QtCore import Qt, QRectF
+from PyQt5.QtCore import Qt, QRectF, QPointF
 
 
 class AttitudeIndicator(QWidget):
@@ -19,6 +19,11 @@ class AttitudeIndicator(QWidget):
         self.accent_color = QColor("#00d4ff")   # 中心飞机
         self.yaw_color    = QColor("#ff4757")   # Yaw 指针
 
+        # 天空/地面（按底色亮度自动切）
+        self.sky_color     = QColor("#12384f")
+        self.ground_color  = QColor("#3a2e20")
+        self.horizon_color = QColor("#8899a6")
+
         self.align_top = False                  # True = 圆盘贴顶画，底色铺满整个控件
 
     def set_attitude(self, roll, pitch, yaw):
@@ -32,6 +37,18 @@ class AttitudeIndicator(QWidget):
         self.border_color = QColor(border)
         self.text_color   = QColor(text)
         self.line_color   = QColor(text)
+        self._update_palette()
+
+    def _update_palette(self):
+        """按底色亮度选天空/地面配色：浅底用浅蓝+沙色，深底用深蓝+深褐"""
+        if self.bg_color.lightness() > 128:
+            self.sky_color     = QColor("#cfe8ff")
+            self.ground_color  = QColor("#d8c39a")
+            self.horizon_color = QColor("#5b6b7a")
+        else:
+            self.sky_color     = QColor("#12384f")
+            self.ground_color  = QColor("#3a2e20")
+            self.horizon_color = QColor("#8899a6")
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -53,27 +70,38 @@ class AttitudeIndicator(QWidget):
         clip.addEllipse(QRectF(cx - R, cy - R, 2*R, 2*R))
         p.setClipPath(clip)
 
-        # ============ 刻度（随 Roll 旋转、随 Pitch 平移） ============
+        # ============ 天空 / 地面（跟着 Roll 转、跟着 Pitch 平移） ============
         p.save()
         p.translate(cx, cy)
         p.rotate(self.roll)
 
-        # Pitch 满量程 ±45°
         pitch_px = self.pitch * R / 45.0
         p.translate(0, pitch_px)
 
-        # 画刻度线：每 10° 一条，从 -40° 到 +40°
+        # 整个圆先铺地面色，再把地平线以上盖成天蓝色
+        p.fillRect(QRectF(-2*R, -2*R, 4*R, 4*R), self.ground_color)
+        p.fillRect(QRectF(-2*R, -2*R, 4*R, 2*R), self.sky_color)
+
+        # 地平线：横贯整个圆，颜色单独，一眼分得清天地
+        p.setPen(QPen(self.horizon_color, 3))
+        p.drawLine(QPointF(-2*R, 0), QPointF(2*R, 0))
+
+        p.restore()
+
+        # ============ 刻度（随 Roll 旋转、随 Pitch 平移） ============
+        p.save()
+        p.translate(cx, cy)
+        p.rotate(self.roll)
+        p.translate(0, pitch_px)
+
+        # 画刻度线：每 10° 一条，从 -40° 到 +40°（0° 就是地平线，上面已经画过）
         for ang in range(-40, 50, 10):
             y = -ang * R / 45.0
-            if abs(y) > R:
+            if abs(y) > R or ang == 0:
                 continue
 
             # 刻度长度：主刻度（整 20°）长，副刻度短
-            if ang == 0:
-                # 地平线：最长
-                half = R * 0.75
-                pen = QPen(self.line_color, 2)
-            elif ang % 20 == 0:
+            if ang % 20 == 0:
                 half = R * 0.35
                 pen = QPen(self.line_color, 2)
             else:
@@ -81,7 +109,7 @@ class AttitudeIndicator(QWidget):
                 pen = QPen(self.line_color, 1)
 
             p.setPen(pen)
-            p.drawLine(int(-half), int(y), int(half), int(y))
+            p.drawLine(QPointF(-half, y), QPointF(half, y))
 
             # 主刻度两侧标注角度数字
             if ang != 0 and ang % 20 == 0:

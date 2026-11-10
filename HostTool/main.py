@@ -4,76 +4,31 @@ from collections import deque
 
 import serial.tools.list_ports
 import pyqtgraph as pg
-from PyQt5.QtCore import Qt, QTimer, QSettings, QPointF, QEvent, QRectF
-from PyQt5.QtGui import QIcon, QPainter, QColor, QPen, QPolygonF
+from PyQt5.QtCore import Qt, QTimer, QSettings, QEvent
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QMessageBox,
-    QFrame, QLabel, QGridLayout, QSizePolicy, QWidget, QPushButton,
+    QGridLayout, QLabel, QWidget,
 )
 from PyQt5 import uic
 
-from serial_thread import SerialThread
-from theme import THEMES
 from attitude_indicator import AttitudeIndicator
+from config import (
+    DATA_LEN, DEFAULT_BAUD, IDX_ACC, IDX_BAR, IDX_GYR, IDX_MAG, IDX_PITCH,
+    IDX_ROLL, IDX_YAW, PAGE_ABOUT, PAGE_CALIBRATION, PAGE_DASHBOARD, PAGE_HELP,
+    PAGE_SIM, PROTOCOL_FIELDS, RC_SEND_MS, REFRESH_MS, SIM_COLOR, SIM_MISS_MAX,
+)
+from help_text import HELP_DOCS, HELP_TOPICS
+from serial_thread import SerialThread
+from sim_page import SimPageMixin
+from theme import THEMES, button_style, combo_style, global_style
+from widgets import FACE_TEXT, FaceTile, FACE_COLOR
 
 # ---------------------------------------------------------------- 常量
 pg.setConfigOptions(antialias=True)
 
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-
-DATA_LEN       = 150          # 曲线缓存点数
-REFRESH_MS     = 50           # 刷新周期
-DEFAULT_BAUD   = 115200
-
-# 协议字段位置（12 字段，逗号分隔）
-IDX_YAW, IDX_ROLL, IDX_PITCH = 0, 1, 2
-IDX_GYR, IDX_ACC, IDX_MAG, IDX_BAR = 8, 9, 10, 11
-PROTOCOL_FIELDS = 12
-
-# 仿真协议（13 字段）：
-# SIM,t_ms,Roll×10,Pitch×10,Yaw×10,Gx×10,Gy×10,Gz×10,M1,M2,M3,M4,高度cm
-SIM_FIELDS = 13
-SIM_IDX_M1 = 8
-SIM_MISS_MAX = 20             # 连续多少帧刷新没收到数据就判掉线（20×50ms≈1s）
-SIM_PLOT_H   = 170            # 仿真页每张图的最小高度（2×2 田字格）
-RC_SEND_MS   = 20             # 虚拟遥控发包周期（ms），固件 200ms 收不到就回中
-RC_KEY_STEP  = 8.0            # 键盘每 20ms 推多少杆量（−100→+100 满行程约 0.5s）
-
-FACE_TEXT = {
-    1: "+Z 朝下（箭头面朝上,平放）",
-    2: "-Z 朝下（箭头面朝下,倒扣）",
-    3: "+X 朝下（箭头面朝前,铅垂）",
-    4: "-X 朝下（箭头面朝后,铅垂）",
-    5: "+Y 朝下（箭头面朝右,铅垂）",
-    6: "-Y 朝下（箭头面朝左,铅垂）",
-}
-
-FACE_SHORT = {
-    1: "+Z 箭头面朝上",
-    2: "-Z 箭头面朝下",
-    3: "+X 箭头面朝前",
-    4: "-X 箭头面朝后",
-    5: "+Y 箭头面朝右",
-    6: "-Y 箭头面朝左",
-}
-
-FACE_COLOR = "#4FC3F7"
-
-# 页面索引
-PAGE_DASHBOARD   = 0
-PAGE_CALIBRATION = 1
-PAGE_SIM         = 2
-PAGE_HELP        = 3
-PAGE_ABOUT       = 4
-
-# 仿真曲线配色
-SIM_COLOR = {
-    "roll":  "#2ed573", "pitch": "#a55eea", "yaw":   "#ff4757",
-    "gx":    "#00a8ff", "gy":    "#e1b12c", "gz":    "#4cd137",
-    "m1":    "#ff6b81", "m2":    "#ffa502", "m3":    "#1e90ff",
-    "m4":    "#7bed9f", "alt":   "#dfe4ea",
-}
 
 def resource_path(relative_path: str) -> str:
     """获取资源绝对路径（兼容 PyInstaller 打包）"""
@@ -83,203 +38,17 @@ def resource_path(relative_path: str) -> str:
 
 UI_PATH = resource_path("FC Configurator.ui")
 
-# ---------------------------------------------------------------- 校准卡片
-class FaceIcon(QWidget):
-    def __init__(self, face: int, parent=None):
-        super().__init__(parent)
-        self.face = face
-        self.state = "idle"
-        self.setMinimumSize(120, 72)
-
-    def set_state(self, state: str):
-        self.state = state
-        self.update()
-
-    def _draw_base(self, painter, scale, ox, oy, c_line):
-        def P(x, y):
-            return QPointF(ox + x*scale, oy + y*scale)
-
-        pen = QPen(QColor(140, 150, 165, 110))
-        pen.setWidthF(max(1.0, 1.2*scale))
-        pen.setStyle(Qt.DashLine)
-        painter.setPen(pen)
-        painter.drawLine(P(30, 168), P(230, 168))
-
-        pen = QPen(c_line)
-        pen.setWidthF(max(1.2, 1.6*scale))
-        painter.setPen(pen)
-        painter.setBrush(Qt.NoBrush)
-
-        return P
-
-    def _paint_board(self, painter, scale, ox, oy, c_line):
-        P = self._draw_base(painter, scale, ox, oy, c_line)
-
-        painter.drawPolygon(QPolygonF([P(75, 20), P(205, 20), P(205, 150), P(75, 150)]))
-
-        if self.face in (1, 4):
-            painter.drawPolygon(QPolygonF([P(140, 42), P(105, 125), P(140, 108), P(175, 125)]))
-        else:
-            painter.drawPolygon(QPolygonF([P(115, 60), P(165, 60), P(165, 110), P(115, 110)]))
-
-    def _paint_edge(self, painter, scale, ox, oy, c_line):
-        P = self._draw_base(painter, scale, ox, oy, c_line)
-
-        painter.drawPolygon(QPolygonF([P(125, 20), P(145, 20), P(145, 150), P(125, 150)]))
-
-        if self.face == 5:
-            painter.drawPolygon(QPolygonF([P(105, 65), P(125, 65), P(125, 100), P(105, 100)]))
-        else:
-            painter.drawPolygon(QPolygonF([P(145, 65), P(165, 65), P(165, 100), P(145, 100)]))
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        scale = min(self.width()/260.0, self.height()/180.0)
-        ox = (self.width() - 260*scale)*0.5
-        oy = (self.height() - 180*scale)*0.5
-
-        if self.state == "done":
-            c_line = QColor(FACE_COLOR)
-        else:
-            c_line = QColor("#8C96A5")
-
-        if self.face in (1, 2, 3, 4):
-            self._paint_board(painter, scale, ox, oy, c_line)
-        else:
-            self._paint_edge(painter, scale, ox, oy, c_line)
-
-        painter.end()
-
-
-class FaceTile(QFrame):
-
-    def __init__(self, face: int, parent=None):
-        super().__init__(parent)
-        self.setObjectName("faceTile")
-        self.setProperty("state", "idle")
-        self.setFixedSize(168, 124)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 3, 4, 3)
-        layout.setSpacing(1)
-
-        self.icon = FaceIcon(face)
-        self.icon.setFixedHeight(88)
-
-        self.title = QLabel(f"FACE{face}  {FACE_SHORT[face]}")
-        self.title.setAlignment(Qt.AlignCenter)
-        self.title.setStyleSheet("font-size: 10pt;")
-
-        layout.addWidget(self.icon)
-        layout.addWidget(self.title)
-
-        self.set_state("idle")
-
-    def set_state(self, state: str):
-        self.setProperty("state", state)
-        self.style().unpolish(self)
-        self.style().polish(self)
-        self.icon.set_state(state)
-
-        if state in ("active", "done"):
-            self.title.setStyleSheet(f"font-size: 10pt; color: {FACE_COLOR};")
-        else:
-            self.title.setStyleSheet("font-size: 10pt;")
-
-
 # ---------------------------------------------------------------- 主窗口
-# ---------------------------------------------------------------- 虚拟摇杆
-class StickPad(QWidget):
-    PAD_W, PAD_H = 150, 150
-    MARGIN_L, MARGIN_R = 4, 4
-    MARGIN_T, MARGIN_B = 4, 4
-
-    def __init__(self, y_top: str, y_bottom: str, x_left: str, x_right: str,
-                 spring_x: bool = True, spring_y: bool = True, parent=None):
-        super().__init__(parent)
-        self.x = 0.0
-        self.y = 0.0
-        self.spring_x = spring_x
-        self.spring_y = spring_y
-        self.y_top = y_top
-        self.y_bottom = y_bottom
-        self.x_left = x_left
-        self.x_right = x_right
-
-        # 配色跟主题走，默认深色
-        self.c_bg     = QColor("#1a2332")
-        self.c_border = QColor("#2a3a4a")
-        self.c_text   = QColor("#8899a6")
-
-        self.setFixedSize(self.PAD_W, self.PAD_H)
-
-    def set_theme(self, bg: str, border: str, text: str):
-        self.c_bg     = QColor(bg)
-        self.c_border = QColor(border)
-        self.c_text   = QColor(text)
-        self.update()
-
-    def _area(self):
-        return QRectF(self.MARGIN_L, self.MARGIN_T,
-                      self.width() - self.MARGIN_L - self.MARGIN_R,
-                      self.height() - self.MARGIN_T - self.MARGIN_B)
-
-    def _to_pos(self):
-        a = self._area()
-        return (a.center().x() + self.x / 100.0 * (a.width() / 2.0 - 10.0),
-                a.center().y() + self.y / 100.0 * (a.height() / 2.0 - 10.0))
-
-    def _set_from_pos(self, pos):
-        a = self._area()
-        self.x = max(-100.0, min(100.0, (pos.x() - a.center().x()) / (a.width() / 2.0 - 10.0) * 100.0))
-        self.y = max(-100.0, min(100.0, (pos.y() - a.center().y()) / (a.height() / 2.0 - 10.0) * 100.0))
-        self.update()
-
-    def mousePressEvent(self, event):
-        self._set_from_pos(event.pos())
-
-    def mouseMoveEvent(self, event):
-        if event.buttons() & Qt.LeftButton:
-            self._set_from_pos(event.pos())
-
-    def mouseReleaseEvent(self, event):
-        if self.spring_x:
-            self.x = 0.0
-        if self.spring_y:
-            self.y = 0.0
-        self.update()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-
-        a = self._area()
-
-        # 摇杆区域（底色/边框跟主题）
-        painter.setPen(QPen(self.c_border, 2))
-        painter.setBrush(self.c_bg)
-        painter.drawRoundedRect(a, 8, 8)
-
-        # 只有中间一横一竖
-        painter.setPen(QPen(self.c_border, 1))
-        painter.drawLine(QPointF(a.center().x(), a.top()), QPointF(a.center().x(), a.bottom()))
-        painter.drawLine(QPointF(a.left(), a.center().y()), QPointF(a.right(), a.center().y()))
-
-        # 摇杆球
-        px, py = self._to_pos()
-        painter.setPen(QPen(QColor("#00d7ff"), 2))
-        painter.setBrush(QColor("#0078d4"))
-        painter.drawEllipse(QPointF(px, py), 12, 12)
-
-
-class MainWindow(QMainWindow):
+class MainWindow(SimPageMixin, QMainWindow):
 
     def __init__(self):
         super().__init__()
         uic.loadUi(UI_PATH, self)
         self._set_window_icon()
+
+        # .ui 里带着一个空状态栏，深色主题下会在底部留一条白边；程序没用到它，直接藏掉
+        self.statusbar.hide()
+        self.menubar.hide()
 
         # --- 运行时状态 ---
         self.serial_thread = None
@@ -376,211 +145,6 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.ahi)
 
-    # ============================================================ 仿真页
-    def _build_simulation(self):
-        self.btn_config.setText("Simu")
-
-        layout = QVBoxLayout(self.page_config)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
-
-        info = QGridLayout()
-        info.setSpacing(4)
-
-        # 美国手（Mode 2）：左杆油门+偏航，右杆俯仰+横滚
-        self.stick_left  = StickPad("1000", "0", "−100", "+100",
-                                    spring_x=True, spring_y=True)    # 油门杆也回中（中位=定高）
-        self.stick_right = StickPad("+100", "−100", "−100", "+100",
-                                    spring_x=True, spring_y=True)
-        self.stick_left.y = 0.0                                      # 初始居中 = 定高
-
-        sticks = QHBoxLayout()
-        sticks.setSpacing(10)
-
-        cap_font = "font-size: 9pt;"
-
-        left_box = QVBoxLayout()
-        left_box.setSpacing(0)
-        cap_left = QLabel("左摇杆")
-        cap_left.setAlignment(Qt.AlignCenter)
-        cap_left.setStyleSheet(cap_font)
-        left_box.addWidget(cap_left)
-        left_box.addWidget(self.stick_left)
-
-        right_box = QVBoxLayout()
-        right_box.setSpacing(0)
-        cap_right = QLabel("右摇杆")
-        cap_right.setAlignment(Qt.AlignCenter)
-        cap_right.setStyleSheet(cap_font)
-        right_box.addWidget(cap_right)
-        right_box.addWidget(self.stick_right)
-
-        sticks.addLayout(left_box)
-        sticks.addLayout(right_box)
-        sticks.addStretch(1)
-
-        self.sim_ahi = AttitudeIndicator()
-        self.sim_ahi.setFixedWidth(310)          # 和两个摇杆的总宽（150+10+150）对齐
-        self.sim_ahi.setMinimumHeight(310)
-        self.sim_ahi.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
-        self.sim_ahi.align_top = True            # 圆盘贴顶，底色铺到底和右边的表对齐
-
-        left_col = QVBoxLayout()
-        left_col.setSpacing(6)
-        left_col.addLayout(sticks)
-        left_col.addWidget(self.sim_ahi, 1)
-
-        self.sim_att_plot = self._make_sim_plot("姿态", -180, 180)
-        self.sim_gyr_plot = self._make_sim_plot("角速度", -250, 250)
-        self.sim_thr_plot = self._make_sim_plot("油门", 0, 1000)
-        self.sim_alt_plot = self._make_sim_plot("高度", 0, 1000)
-
-        self.sim_plots = (
-            (self.sim_att_plot, -180, 180),
-            (self.sim_gyr_plot, -250, 250),
-            (self.sim_thr_plot,    0, 1000),
-            (self.sim_alt_plot,    0, 1000),
-        )
-
-        for plot, y_min, y_max in self.sim_plots:
-            plot.setMinimumHeight(SIM_PLOT_H)
-
-        # 四张图排 2×2 田字格，一屏能全看到
-        grid = QGridLayout()
-        grid.setSpacing(8)
-        grid.addWidget(self.sim_att_plot, 0, 0)
-        grid.addWidget(self.sim_gyr_plot, 0, 1)
-        grid.addWidget(self.sim_thr_plot, 1, 0)
-        grid.addWidget(self.sim_alt_plot, 1, 1)
-
-        # 左边摇杆+姿态球，右边四张图
-        body = QHBoxLayout()
-        body.setSpacing(10)
-        body.addLayout(left_col)
-        body.addLayout(grid, 1)
-
-        # 解锁按钮：上电默认上锁，点一下才给电调输出
-        self.arm_button = QPushButton("解锁")
-        self.arm_button.setCheckable(True)
-        self.arm_button.setFixedHeight(30)
-        self.arm_button.clicked.connect(self._on_arm_clicked)
-
-        layout.addWidget(self.arm_button)
-        layout.addLayout(body, 1)
-
-        # 曲线加完之后再锁一次横轴：addCurve 会把自动量程重新打开
-        for plot, y_min, y_max in self.sim_plots:
-            plot.setXRange(0, DATA_LEN - 1, padding=0)
-
-        self.sim_curve = {
-            "roll":  self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["roll"],  width=2), name="Roll"),
-            "pitch": self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["pitch"], width=2), name="Pitch"),
-            "yaw":   self.sim_att_plot.plot(pen=pg.mkPen(SIM_COLOR["yaw"],   width=2), name="Yaw"),
-
-            "gx":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gx"], width=2), name="Gx"),
-            "gy":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gy"], width=2), name="Gy"),
-            "gz":    self.sim_gyr_plot.plot(pen=pg.mkPen(SIM_COLOR["gz"], width=2), name="Gz"),
-
-            "m1":    self.sim_thr_plot.plot(pen=pg.mkPen(SIM_COLOR["m1"], width=2), name="M1"),
-            "m2":    self.sim_thr_plot.plot(pen=pg.mkPen(SIM_COLOR["m2"], width=2), name="M2"),
-            "m3":    self.sim_thr_plot.plot(pen=pg.mkPen(SIM_COLOR["m3"], width=2), name="M3"),
-            "m4":    self.sim_thr_plot.plot(pen=pg.mkPen(SIM_COLOR["m4"], width=2), name="M4"),
-
-            "alt":   self.sim_alt_plot.plot(pen=pg.mkPen(SIM_COLOR["alt"], width=2), name="高度"),
-        }
-
-        for plot, y_min, y_max in self.sim_plots:
-            plot.setYRange(y_min, y_max, padding=0)
-            plot.setXRange(0, DATA_LEN - 1, padding=0)
-
-    def _make_sim_plot(self, title: str, y_min: int, y_max: int):
-        plot = pg.PlotWidget(title=title)
-        plot.setYRange(y_min, y_max)
-        plot.setXRange(0, DATA_LEN - 1)                       # 横轴 = 采样点序号
-        plot.showGrid(x=True, y=True, alpha=0.2)
-        plot.addLegend(offset=(6, 4), labelTextSize="8pt")
-        plot.setMouseEnabled(x=False, y=False)
-        return plot
-
-    def _handle_sim_line(self, line: str):
-        """解析一行 SIM,... 数据"""
-        parts = line.split(",")
-        if len(parts) != SIM_FIELDS:
-            return
-        try:
-            data = {
-                "t":     int(parts[1]),
-                "roll":  int(parts[2]) / 10.0,
-                "pitch": int(parts[3]) / 10.0,
-                "yaw":   int(parts[4]) / 10.0,
-                "gx":    int(parts[5]) / 10.0,
-                "gy":    int(parts[6]) / 10.0,
-                "gz":    int(parts[7]) / 10.0,
-                "m1":    int(parts[SIM_IDX_M1]),
-                "m2":    int(parts[SIM_IDX_M1 + 1]),
-                "m3":    int(parts[SIM_IDX_M1 + 2]),
-                "m4":    int(parts[SIM_IDX_M1 + 3]),
-                "alt":   int(parts[12]),
-            }
-        except (ValueError, IndexError):
-            return
-
-        self.sim_latest.update(data)
-        for key in SIM_COLOR:
-            self.sim_curves[key].append(float(data[key]))
-
-        self.sim_seq += 1
-
-    def _send_rc(self):
-        """50Hz 把两个摇杆的杆量灌给固件（虚拟遥控）"""
-        Thro  = (100.0 - self.stick_left.y) * 5.0      # 杆上推 = 油门大，0~1000
-        Yaw   = self.stick_left.x
-        Roll  = self.stick_right.x
-        Pitch = self.stick_right.y
-
-        if self.serial_thread is None or self.serial_thread.ser is None:
-            return
-
-        try:
-            self.serial_thread.ser.write(
-                f"rc,{Thro:.0f},{Yaw:.0f},{Roll:.0f},{Pitch:.0f}\n".encode())
-        except Exception:
-            pass
-
-    def _on_arm_clicked(self):
-        """解锁/上锁按钮：点一下发一次 arm,<0|1>"""
-        Arm = 1 if self.arm_button.isChecked() else 0
-
-        self.arm_button.setText("上锁" if Arm else "解锁")
-
-        if self.serial_thread is None or self.serial_thread.ser is None:
-            return
-
-        try:
-            self.serial_thread.ser.write(f"arm,{Arm}\n".encode())
-        except Exception:
-            pass
-
-    def _update_sim(self):
-        if self.sim_seq != self.sim_seen:
-            self.sim_seen = self.sim_seq
-            self.sim_miss = 0
-        elif self.sim_miss < SIM_MISS_MAX:
-            self.sim_miss += 1
-
-        if self.sim_miss >= SIM_MISS_MAX:
-            return                      # 掉线就不刷了
-
-        if self.stackedWidget.currentIndex() != PAGE_SIM:
-            return                      # 不在仿真页就不用刷曲线
-
-        d = self.sim_latest
-
-        self.sim_ahi.set_attitude(d["roll"], d["pitch"], d["yaw"])
-
-        for key, curve in self.sim_curve.items():
-            curve.setData(list(self.sim_curves[key]))
-
     # ============================================================ 提示信息
     def _show_hint(self, text):
         self.hint_label.setText(text)
@@ -604,52 +168,10 @@ class MainWindow(QMainWindow):
 
                 if event.key() in self.keys_down:
                     self.keys_down.discard(event.key())
-
-                    if event.key() in (Qt.Key_W, Qt.Key_S):         # 高度自回中（中位=定高）
-                        self.stick_left.y = 0.0
-                        self.stick_left.update()
-                    if event.key() in (Qt.Key_A, Qt.Key_D):         # 偏航自回中
-                        self.stick_left.x = 0.0
-                        self.stick_left.update()
-                    if event.key() in (Qt.Key_Up, Qt.Key_Down):     # 俯仰自回中
-                        self.stick_right.y = 0.0
-                        self.stick_right.update()
-                    if event.key() in (Qt.Key_Left, Qt.Key_Right):  # 横滚自回中
-                        self.stick_right.x = 0.0
-                        self.stick_right.update()
+                    self._release_pad(event.key())     # 松键回中
                     return True
 
         return super().eventFilter(obj, event)
-
-    def _key_step(self):
-        if not self.keys_down or self.stackedWidget.currentIndex() != PAGE_SIM:
-            return
-
-        left  = self.stick_left
-        right = self.stick_right
-        moved = False
-
-        if Qt.Key_W in self.keys_down:
-            left.y = max(-100.0, left.y - RC_KEY_STEP); moved = True
-        if Qt.Key_S in self.keys_down:
-            left.y = min(100.0, left.y + RC_KEY_STEP); moved = True
-        if Qt.Key_A in self.keys_down:
-            left.x = max(-100.0, left.x - RC_KEY_STEP); moved = True
-        if Qt.Key_D in self.keys_down:
-            left.x = min(100.0, left.x + RC_KEY_STEP); moved = True
-
-        if Qt.Key_Up in self.keys_down:                 # ↑ 低头前飞
-            right.y = max(-100.0, right.y - RC_KEY_STEP); moved = True
-        if Qt.Key_Down in self.keys_down:               # ↓ 抬头
-            right.y = min(100.0, right.y + RC_KEY_STEP); moved = True
-        if Qt.Key_Left in self.keys_down:
-            right.x = max(-100.0, right.x - RC_KEY_STEP); moved = True
-        if Qt.Key_Right in self.keys_down:
-            right.x = min(100.0, right.x + RC_KEY_STEP); moved = True
-
-        if moved:
-            left.update()
-            right.update()
 
     def _bind_signals(self):
         self.theme_button.clicked.connect(self.toggle_theme)
@@ -705,47 +227,10 @@ class MainWindow(QMainWindow):
 
     # ============================================================ Help 页面
     def _init_help_content(self):
-        self.help_list.addItems([
-            "飞控连接",
-            "传感器校准",
-            "实时数据",
-            "常见问题"
-        ])
-        
-        self._help_docs = {
-            "飞控连接": """
-                <h2>如何连接飞控？</h2>
-                <p>1. 使用 USB 数据线将飞控连接到电脑。</p>
-                <p>2. 在软件右上角的 <b>PORT</b> 下拉框中选择对应的串口(如 COM5)</p>
-                <p>3. 点击 <b>CONNECT</b> 按钮.如果连接成功,状态栏会变为绿色并显示 CONNECTED</p>
-                <p><i>提示：如果在下拉框中找不到串口，请点击旁边的刷新按钮 ↻ 重新扫描</i></p>
-            """,
-            "传感器校准": """
-                <h2>传感器校准指南</h2>
-                <p>左侧导航栏点击 <b>Calib</b> 进入校准页面</p>
-                <ul>
-                    <li><b>IMU</b> 先把 FACE1（箭头面朝上）放好点 Start；之后按图示逐面放好点 NEXT，最后陀螺阶段保持静止。</li>
-                    <li><b>Mag</b> 远离金属物体，拿起飞行器缓慢翻转各个方向约 10 秒（不要只平着转 yaw）。</li>
-                </ul>
-                <p><i>气压计不需要校准，开机直接读取。</i></p>
-                <p>校准过程中可以点 <b>STOP</b> 取消。</p>
-            """,
-            "实时数据": """
-                <h2>实时数据监控</h2>
-                <p>在主页面(Main),你可以实时查看飞行器的姿态信息</p>
-                <p>左侧的 <b>姿态球</b> 会实时模拟飞行器的真实倾斜状态</p>
-                <p>右侧的 <b>曲线图</b> 展示了 Yaw、Roll、Pitch 变化趋势,便于分析震动和姿态漂移</p>
-            """,
-            "常见问题": """
-                <h2>常见问题 (FAQ)</h2>
-                <p><b>Q: 点击 CONNECT 后提示连接失败？</b></p>
-                <p>A: 请检查串口是否被其他软件占用,或者更换一根可通信的数据线</p>
-                <br>
-                <p><b>Q: 姿态球显示的数据一直在乱转？</b></p>
-                <p>A: 可能是校准失败或罗盘受到干扰,请重新校准或远离磁场干扰</p>
-            """
-        }
-        
+        self.help_list.addItems(HELP_TOPICS)
+
+        self._help_docs = HELP_DOCS
+
         self.help_list.currentTextChanged.connect(self._on_help_topic_changed)
         self.help_list.setCurrentRow(0)
 
@@ -978,109 +463,22 @@ class MainWindow(QMainWindow):
         self.current_theme = theme_name
 
         self.centralwidget.setStyleSheet(f"background-color: {t['centralwidget']};")
+        self.setStyleSheet(global_style(theme_name, FACE_COLOR))
 
-        # 全局 QSS：只控制 Frame 背景和 Label 字体颜色
-        self.setStyleSheet(f"""
-            QLabel       {{ color: {t['label_color']}; }}
-            QLabel#name  {{ color: {t['name_color']}; }}
-
-            QFrame#top_frame       {{ background-color: {t['top_frame']}; }}
-            QFrame#health_frame    {{ background-color: {t['health_frame']}; }}
-            QFrame#plot_frame      {{ background-color: {t['plot_frame']}; }}
-            QFrame#attitude_frame  {{ background-color: {t['attitude_frame']}; }}
-            QFrame#nav_frame       {{ background-color: {t['nav_frame']}; }}
-            QFrame#calib_frame     {{ background-color: {t['plot_frame']}; }}
-            QFrame#about_frame     {{ background-color: {t['plot_frame']}; }}
-            QFrame#line_frame      {{ background-color: {t['plot_grid']}; }}
-
-            QFrame#faceTile {{
-                border: 1px solid {t['plot_grid']};
-                border-radius: 8px;
-                background-color: rgba(255, 255, 255, 8);
-            }}
-            QFrame#faceTile[state="active"] {{ border: 2px solid {FACE_COLOR}; }}
-            QFrame#faceTile[state="done"]   {{ border: 2px solid {FACE_COLOR}; }}
-
-            QPlainTextEdit {{
-                background-color: {t['plot_bg']};
-                color: {t['label_color']};
-                border: 1px solid {t['plot_grid']};
-            }}
-
-            QTextBrowser {{
-                background-color: {t['plot_bg']};
-                color: {t['label_color']};
-                border: 1px solid {t['plot_grid']};
-                padding: 10px;
-            }}
-            QListWidget {{
-                background-color: {t['nav_frame']};
-                color: {t['label_color']};
-                border: 1px solid {t['plot_grid']};
-                outline: none;
-            }}
-            QListWidget::item:selected {{
-                background-color: {t['nav_checked_bg']};
-                color: {t['nav_checked_fg']};
-            }}
-            
-            QProgressBar {{
-                background-color: {t['plot_grid']};
-                border: 1px solid {t['plot_grid']};
-                border-radius: 4px;
-                text-align: center;
-                color: {t['label_color']};
-            }}
-            QProgressBar::chunk {{
-                background-color: {t['name_color']};
-                border-radius: 3px;
-            }}
-        """)
-
-        # ============================================================
-        # 点名给普通按钮和下拉框加圆角，彻底告别系统直角
-        # ============================================================
         normal_btns = [
             self.theme_button, self.refresh_button, self.link_button,
             self.start_accgyr, self.start_mag,
             self.reset_accgyr, self.reset_mag
         ]
-        
-        if theme_name == "dark":
-            btn_bg, btn_border = "#1a2332", "#2a3a4a"
-            btn_hover, btn_pressed = "#2a3a4a", "#0f1419"
-        else:
-            btn_bg, btn_border = "#ffffff", "#d0d7de"
-            btn_hover, btn_pressed = "#f4f6f8", "#e1e4e8"
 
-        btn_style = f"""
-            QPushButton {{
-                color: {t['label_color']};
-                background-color: {btn_bg};
-                border: 1px solid {btn_border};
-                border-radius: 6px;
-            }}
-            QPushButton:hover {{ background-color: {btn_hover}; }}
-            QPushButton:pressed {{ background-color: {btn_pressed}; }}
-        """
-        combo_style = f"""
-            QComboBox {{
-                color: {t['label_color']};
-                background-color: {btn_bg};
-                border: 1px solid {btn_border};
-                border-radius: 4px;
-                padding-left: 5px;
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: {btn_bg};
-                color: {t['label_color']};
-            }}
-        """
-
-        # 应用样式
         for btn in normal_btns:
-            btn.setStyleSheet(btn_style)
-        self.port_box.setStyleSheet(combo_style)
+            btn.setStyleSheet(button_style(theme_name))
+        self.port_box.setStyleSheet(combo_style(theme_name))
+        self._style_arm_button()
+
+        # 仿真页的读数跟着主题走
+        self.sim_numbers.setStyleSheet(
+            "font-size: 9pt; font-family: Consolas, monospace; color: %s;" % t["label_color"])
 
         # 曲线和姿态球
         self.plot.setBackground(t["plot_bg"])
@@ -1109,7 +507,7 @@ class MainWindow(QMainWindow):
             pad.set_theme(t["plot_bg"], t["plot_grid"], t["plot_text"])
 
         self.theme_button.setText("☀" if theme_name == "light" else "🌙")
-        
+
         # 刷新导航按钮颜色
         self._switch_page(self.stackedWidget.currentIndex())
 
@@ -1173,6 +571,12 @@ class MainWindow(QMainWindow):
         self.link_button.setText("CONNECT")
         self.link_status.setText("NOT CONNECTED")
 
+        # 断开后按钮回到"未解锁"并禁用，防止离线状态下瞎切换
+        self.arm_button.setChecked(False)
+        self.arm_button.setText("未解锁")
+        self.arm_button.setEnabled(False)
+        self._style_arm_button()
+
         self._show_hint("")
 
         for pb in (self.progressBar_accgyr, self.progressBar_mag):
@@ -1186,6 +590,12 @@ class MainWindow(QMainWindow):
             self.link_button.setText("DISCONNECT")
             self.link_status.setText("CONNECTED")
             self.refresh_timer.start()
+
+            # 连上了才允许切换解锁；状态以固件遥测为准
+            self.arm_button.setChecked(False)
+            self.arm_button.setText("未解锁")
+            self.arm_button.setEnabled(True)
+            self._style_arm_button()
 
             self._show_hint("校准参数：查询中…")
             try:

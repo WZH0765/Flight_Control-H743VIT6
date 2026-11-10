@@ -164,7 +164,7 @@ void Simulator(void)
     HW_Sample.Pressure    = 101325.0f*powf(1.0f - AltM/44330.0f,5.25588f) + SIM_BAR_NOISE*Simulator_Rand();
     HW_Sample.Temperature = 25.0f;
 
-    printf("SIM,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n",
+    printf("SIM,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n",
     (int)(AHRS.Roll *RAD_TO_DEG*10.0f),
     (int)(AHRS.Pitch*RAD_TO_DEG*10.0f),
     (int)(AHRS.Yaw  *RAD_TO_DEG*10.0f),
@@ -172,5 +172,6 @@ void Simulator(void)
     (int)(Sim_W[1]*RAD_TO_DEG*10.0f),
     (int)(Sim_W[2]*RAD_TO_DEG*10.0f),
     SimuThro[0],SimuThro[1],SimuThro[2],SimuThro[3],
-    (int)(-Sim_P[2]*100.0f));
+    (int)(-Sim_P[2]*100.0f),
+    (State == ARM) ? 1 : 0);            //解锁状态，上位机靠它显示
 }
