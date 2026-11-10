@@ -8,19 +8,19 @@
 #include "SysTime.h"
 #include "hardware.h"
 
-float SetRoll;              //遥控器(模拟器)设定Roll
-float SetPitch;             //遥控器(模拟器)设定Pitch
-float SetThro = 0.0f;       //遥控器(模拟器)设定Throttle
-float SetYawRate = 0.0f;    //遥控器(模拟器)设定Yaw角速度
+float RC_SetRoll;              //遥控器(模拟器)设定Roll
+float RC_SetPitch;             //遥控器(模拟器)设定Pitch
+float RC_SetThro = 0.0f;       //遥控器(模拟器)设定Throttle
+float RC_SetYawRate = 0.0f;    //遥控器(模拟器)设定Yaw角速度
 
 pid_t PID_YawRate;          //Yaw   角速度环
 pid_t PID_RollRate;         //Roll  角速度环
 pid_t PID_PitchRate;        //Pitch 角速度环
-fltstate_e State = DISARM;
+fltState_e State = DISARM;
 
-static const float Kp[3] = {0.0053f,0.0040f,0.0040f};
-static const float Ki[3] = {0.0027f,0.0013f,0.0013f};
-static const float Kd[3] = {0.0000f,0.0000f,0.0000f};
+const float Kp[3] = {0.0053f,0.0040f,0.0040f};
+const float Ki[3] = {0.0027f,0.0013f,0.0013f};
+const float Kd[3] = {0.0000f,0.0000f,0.0000f};
 
 /*****************************
   M1 前右 顺时针  M2 后右 逆时针
@@ -38,9 +38,9 @@ const float Mix_Table[4][3] =
 void Flight_Init(void)
 {
     State = DISARM;
-    SetThro = 0.0f;
-    SetRoll  = 0.0f;
-    SetPitch = 0.0f;
+    RC_SetThro = 0.0f;
+    RC_SetRoll  = 0.0f;
+    RC_SetPitch = 0.0f;
 
     Height_Init();
     PID_Init(&PID_YawRate  ,Kp[0],Ki[0],Kd[0]);
@@ -51,57 +51,70 @@ void Flight_Init(void)
 /***************
 *  遥控输入
 *
-*  形  参：Thro 0~1000，Yaw/Roll/Pitch −100~100（杆量百分比）
+*  形  参：Thro 0~1000，Yaw/Roll/Pitch −100~100
 ****************/
 void Flight_Stick(float Thro,float Yaw,float Roll,float Pitch)
 {
-    SetThro = fmaxf(0.0f,fminf(1000.0f,Thro));
-    SetRoll  = fmaxf(-100.0f,fminf(100.0f,Roll));
-    SetPitch = fmaxf(-100.0f,fminf(100.0f,Pitch));
-    SetYawRate = fmaxf(-100.0f,fminf(100.0f,Yaw))*RC_RATE_MAX/100.0f;
+    RC_SetThro = fmaxf(0.0f,fminf(MAX_THRO,Thro));
+    RC_SetRoll  = fmaxf(-100.0f,fminf(100.0f,Roll));
+    RC_SetPitch = fmaxf(-100.0f,fminf(100.0f,Pitch));
+    RC_SetYawRate = fmaxf(-100.0f,fminf(100.0f,Yaw))*MAX_RATE/100.0f;
 }
 
 void Flight_Update(float Gx,float Gy,float Gz,float dt)
 {
-    if(State != ARM)
+    switch(State)
     {
-        Motor_Stop();
-        return;
-    }
+/**************************遥控器(模拟器)解锁**************************/
+        case ARM:
+        //遥控器(模拟器)摇杆量映射到弧度
+        float SetRoll  = RC_SetRoll /100.0f*MAX_ANGLE/RAD_TO_DEG;
+        float SetPitch = RC_SetPitch/100.0f*MAX_ANGLE/RAD_TO_DEG;
 
-    float RollSp  = SetRoll *ANGLE_MAX/RAD_TO_DEG/100.0f;
-    float PitchSp = SetPitch*ANGLE_MAX/RAD_TO_DEG/100.0f;
+        //遥控器(模拟器)摇杆量映射到角速度
+        float SetRate[3];
+        SetRate[0] = RC_SetYawRate;
+        SetRate[1] = fmaxf(-MAX_RATE,fminf(MAX_RATE,ANGLE_KP*(SetRoll  - AHRS.Roll )*RAD_TO_DEG));
+        SetRate[2] = fmaxf(-MAX_RATE,fminf(MAX_RATE,ANGLE_KP*(SetPitch - AHRS.Pitch)*RAD_TO_DEG));
 
-    float RateSp[3];
-    RateSp[0] = SetYawRate;
-    RateSp[1] = fmaxf(-RC_RATE_MAX,fminf(RC_RATE_MAX,ANGLE_KP*(RollSp  - AHRS.Roll )*RAD_TO_DEG));
-    RateSp[2] = fmaxf(-RC_RATE_MAX,fminf(RC_RATE_MAX,ANGLE_KP*(PitchSp - AHRS.Pitch)*RAD_TO_DEG));
+        //内环更新
+        float Corr[3];
+        Corr[0] = PID_Update(&PID_YawRate  ,SetRate[0],Gz*RAD_TO_DEG,dt);
+        Corr[1] = PID_Update(&PID_RollRate ,SetRate[1],Gx*RAD_TO_DEG,dt);
+        Corr[2] = PID_Update(&PID_PitchRate,SetRate[2],Gy*RAD_TO_DEG,dt);
 
-    float Corr[3];
-    Corr[0] = PID_Update(&PID_YawRate  ,RateSp[0],Gz*RAD_TO_DEG,dt);
-    Corr[1] = PID_Update(&PID_RollRate ,RateSp[1],Gx*RAD_TO_DEG,dt);
-    Corr[2] = PID_Update(&PID_PitchRate,RateSp[2],Gy*RAD_TO_DEG,dt);
+        //姿态修正量
+        float Mix[4];
+        for(uint8_t i = 0;i < 4;i ++)
+        {
+            Mix[i] = MIX_GAIN*(Mix_Table[i][0]*Corr[0] + Mix_Table[i][1]*Corr[1] + Mix_Table[i][2]*Corr[2]);
+        }
+        float Max = MAX4(Mix[0],Mix[1],Mix[2],Mix[3]);
+        float Min = MIN4(Mix[0],Mix[1],Mix[2],Mix[3]);
 
-    float Mix[4];
-    float Max = -10000.0f,Min = 10000.0f;
-    for(uint8_t i = 0;i < 4;i ++)
-    {
-        Mix[i] = MIX_GAIN*(Mix_Table[i][0]*Corr[0] + Mix_Table[i][1]*Corr[1] + Mix_Table[i][2]*Corr[2]);
+        //放缩
+        float Scale = fminf(1.0f,(MAX_THRO - MIN_THRO)/(Max - Min));
+        Max *= Scale;
+        Min *= Scale;
 
-        Max = fmaxf(Max,Mix[i]);
-        Min = fminf(Min,Mix[i]);
-    }
-    float Scale = fminf(1.0f,(1000.0f - MIN_THRO)/(Max - Min));
+        //基准油门-基于高度环
+        float BaseThro = Height_Update(RC_SetThro,dt);
+        BaseThro = fminf(BaseThro,MAX_THRO - Max);
+        BaseThro = fmaxf(BaseThro,MIN_THRO - Min);
 
-    Max *= Scale;
-    Min *= Scale;
+        for(uint8_t i = 0;i < 4;i ++)
+        {
+            Motor_Set(i,(uint16_t)fmaxf(MIN_THRO,fminf(MAX_THRO,BaseThro + Mix[i]*Scale)));
+        }
+            break;
+/*************************遥控器(模拟器)未解锁*************************/
+        case DISARM:
 
-    float BaseThro = Height_Update(SetThro,dt);
-    BaseThro = fminf(BaseThro,1000.0f - Max);
-    BaseThro = fmaxf(BaseThro,MIN_THRO - Min);
+        //加入未解锁逻辑
 
-    for(uint8_t i = 0;i < 4;i ++)
-    {
-        Motor_Set(i,(uint16_t)fmaxf(MIN_THRO,fminf(1000.0f,BaseThro + Mix[i]*Scale)));
+/******************************飞控失效******************************/
+        case FAILSAFE:
+            Motor_Stop();
+            return;
     }
 }

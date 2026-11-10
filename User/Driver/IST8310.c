@@ -46,7 +46,6 @@ void IST8310_Init(mag_t *Device)
     Bus_Write(Device->BusDevice,IST8310_RA_PDCNTL,IST8310_PULSE_DURATION);
     HAL_Delay(5);
 
-    /*IST8310为板载磁力计时，I2C总线速度可设置为400KHz*/
     // Bus_SetSpeed(Device->BusDevice,I2C_SPEED_FAST);
 }
 

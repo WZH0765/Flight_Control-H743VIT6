@@ -8,15 +8,15 @@
 #include "hardware.h"
 #include "Simulator.h"
 
-extern float SetThro;
+extern float RC_SetThro;
 
 uint16_t SimuThro[4];           //模拟量油门（0~1000）
 
-static float    Sim_Q[4];       //姿态四元数，与 AHRS 同一约定（q0 为实部）
-static float    Sim_W[3];       //机体系角速度（rad/s）
-static float    Sim_V[3];       //NED 速度（m/s）
-static float    Sim_P[3];       //NED 位置（m，Z 向下为正）
-static float    Sim_U[4];       //电机实际油门（0~1，含滞后）
+static float Sim_Q[4];       //姿态四元数，与 AHRS 同一约定（q0 为实部）
+static float Sim_W[3];       //机体系角速度（rad/s）
+static float Sim_V[3];       //NED 速度（m/s）
+static float Sim_P[3];       //NED 位置（m，Z 向下为正）
+static float Sim_U[4];       //电机实际油门（0~1，含滞后）
 
 /*电机位置：x 前、y 右（m）*/
 static const float Sim_Pos[4][2] =
@@ -57,7 +57,7 @@ void Simulator_Init(void)
     MAG_CalValid = false;
 
     State   = DISARM;           //上电不解锁，等上位机发 arm,1
-    SetThro = 0.0f;             //定高模式下它现在是"目标高度比例"，0 = 停在地面等摇杆
+    RC_SetThro = 0.0f;             //定高模式下它现在是"目标高度比例"，0 = 停在地面等摇杆
     printf("SIM,start\r\n");
 }
 

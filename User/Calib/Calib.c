@@ -6,7 +6,7 @@
 #include "Hardware.h"
 
 sensor_t Mode  = IMU;
-calstate_e  CAL_State = IDLE;
+calstate_e CAL_State = IDLE;
 
 /*****校准结果*****/
 float Acc_Bias[3];

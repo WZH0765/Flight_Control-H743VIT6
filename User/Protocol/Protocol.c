@@ -60,7 +60,6 @@ void Prot_Process(char *Cmd)
     sscanf(Cmd,"%15s %15s %15s",Name,Arg1,Arg2);
 
 #ifdef USE_SIM
-/*虚拟遥控*/
     if(strcmp(Name,"RC") == 0)
     {
         sscanf(Cmd,"%*s %d %d %d %d",&Val[0],&Val[1],&Val[2],&Val[3]);
@@ -69,14 +68,12 @@ void Prot_Process(char *Cmd)
     }
 #endif
 
-    /*解锁/上锁：先重跑 Flight_Init() 清油门、杆量、积分、定高状态，再决定 Status*/
     if(strcmp(Name,"ARM") == 0)
     {
         sscanf(Cmd,"%*s %d",&Val[0]);
 
         Flight_Init();
-
-        if(Val[0] != 0) State = ARM;        //Flight_Init() 里已经置 DISARM
+        if(Val[0] != 0) State = ARM;
 
         return;
     }

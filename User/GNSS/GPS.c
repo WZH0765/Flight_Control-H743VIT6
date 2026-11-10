@@ -5,7 +5,7 @@
 #include "SysTime.h"
 
 gpsData_t GPS_Data;
-static gpsData_t GPS_Buf;  //整句写完再发布
+static gpsData_t GPS_Buf;
 
 __attribute__((section(".dma_buffer")))
 uint8_t GPS_RxBuffer[GPS_RX_SIZE];

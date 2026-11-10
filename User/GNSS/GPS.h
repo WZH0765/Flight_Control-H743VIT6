@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#define GPS_RX_SIZE 1024        //DMA 接收缓冲，实际用 SIZE-1，留一字节放结束符
+#define GPS_RX_SIZE 1024
 
 typedef enum
 {
