@@ -19,6 +19,7 @@ from config import (
     PAGE_SIM, PROTOCOL_FIELDS, RC_SEND_MS, REFRESH_MS, SIM_COLOR, SIM_MISS_MAX,
 )
 from help_text import HELP_DOCS, HELP_TOPICS
+from gps_page import GpsMixin
 from serial_thread import SerialThread
 from sim_page import SimPageMixin
 from theme import THEMES, button_style, combo_style, global_style
@@ -39,7 +40,7 @@ def resource_path(relative_path: str) -> str:
 UI_PATH = resource_path("FC Configurator.ui")
 
 # ---------------------------------------------------------------- 主窗口
-class MainWindow(SimPageMixin, QMainWindow):
+class MainWindow(SimPageMixin, GpsMixin, QMainWindow):
 
     def __init__(self):
         super().__init__()
@@ -65,7 +66,7 @@ class MainWindow(SimPageMixin, QMainWindow):
         self.sim_latest = {
             "t": 0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0,
             "gx": 0.0, "gy": 0.0, "gz": 0.0,
-            "m1": 0, "m2": 0, "m3": 0, "m4": 0, "alt": 0.0,
+            "m1": 0, "m2": 0, "m3": 0, "m4": 0, "alt": 0.0, "n": 0.0, "e": 0.0,
         }
         self.sim_curves = {
             key: deque([0.0] * DATA_LEN, maxlen=DATA_LEN)
@@ -79,6 +80,7 @@ class MainWindow(SimPageMixin, QMainWindow):
         self._build_plot()
         self._build_attitude_indicator()
         self._build_simulation()
+        self._build_gps_page()
 
         # --- 定时刷新 ---
         self.refresh_timer = QTimer(self)
@@ -184,6 +186,7 @@ class MainWindow(SimPageMixin, QMainWindow):
             (self.btn_dashboard,   PAGE_DASHBOARD),
             (self.btn_calibration, PAGE_CALIBRATION),
             (self.btn_config,      PAGE_SIM),
+            (self.btn_gps,         self._page_gps_idx),
             (self.btn_help,        PAGE_HELP),
             (self.btn_about,       PAGE_ABOUT),
         ]
@@ -501,6 +504,10 @@ class MainWindow(SimPageMixin, QMainWindow):
 
         self.ahi.set_colors(bg=t["plot_bg"], border=t["plot_grid"], text=t["plot_text"])
 
+        # GPS 地图的文字颜色跟着主题走
+        self.vmap.set_colors(t["plot_bg"], t["plot_grid"], t["plot_text"])
+        self.gps_map_big.set_colors(t["plot_text"])
+
         # 仿真页：姿态球配色 + 摇杆底色跟主题
         self.sim_ahi.set_colors(bg=t["plot_bg"], border=t["plot_grid"], text=t["plot_text"])
         for pad in (self.stick_left, self.stick_right):
@@ -634,6 +641,9 @@ class MainWindow(SimPageMixin, QMainWindow):
         if upper.startswith("SIM,"):
             self._handle_sim_line(line)
             return
+        if upper.startswith("GPS,"):
+            self._handle_gps_line(line)
+            return
         if upper.startswith("CAL,STATUS,"):
             self._handle_cal_status(line)
             return
@@ -702,6 +712,13 @@ class MainWindow(SimPageMixin, QMainWindow):
         if self.serial_thread is not None:
             self.serial_thread.stop()
             self.serial_thread = None
+
+        self.gps_map_big.fetcher.stop()     # 瓦片下载线程要收掉，否则 Qt 会警告
+
+        if self._locator is not None:
+            self._locator.stop()
+            self._locator.wait(5000)            # 单个请求 1.5s 超时，五个请求封顶也就 4.5s
+
         super().closeEvent(event)
 
 

@@ -15,7 +15,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "Simulator.h"
 #include "GPS.h"
 #include "Task.h"
 #include "AHRS.h"
@@ -28,6 +27,7 @@
 #include "Receiver.h"
 #include "Hardware.h"
 #include "Scheduler.h"
+#include "Simulator.h"
 #include "usbd_cdc_if.h"
 
 /* USER CODE END Includes */
@@ -44,7 +44,10 @@
 
 // #define USER_DEBUG_AHRS
 // #define USER_DEBUG_DEVICE
-// #define USER_DEBUG_HOST_TOOL
+
+#ifndef USE_SIM
+#define USER_DEBUG_HOST_TOOL
+#endif
 
 /* USER CODE END PD */
 

@@ -10,12 +10,14 @@ IDX_YAW, IDX_ROLL, IDX_PITCH = 0, 1, 2
 IDX_GYR, IDX_ACC, IDX_MAG, IDX_BAR = 8, 9, 10, 11
 PROTOCOL_FIELDS = 12
 
-# ---------------- 仿真遥测协议（13 字段）
-# SIM,roll,pitch,yaw,gx,gy,gz,m1,m2,m3,m4,alt,arm   （姿态/角速度 ×10）
-SIM_FIELDS   = 13
+# ---------------- 仿真遥测协议（15 字段）
+# SIM,roll,pitch,yaw,gx,gy,gz,m1,m2,m3,m4,alt,arm,north,east   （姿态/角速度 ×10，位置 cm）
+SIM_FIELDS   = 15
 SIM_IDX_M1   = 7              # 四路油门在字段里的起始下标
+SIM_IDX_N    = 13             # 北向位置（cm）
+SIM_IDX_E    = 14             # 东向位置（cm）
 SIM_MISS_MAX = 20             # 连续多少帧没数据判掉线（20×50ms≈1s）
-SIM_PLOT_H   = 170            # 仿真页每张图的最小高度（2×2 田字格）
+SIM_PLOT_H   = 140            # 仿真页每张图的最小高度（四张图 + 地图挤在一列里）
 
 # ---------------- 虚拟遥控
 RC_SEND_MS  = 20              # 发包周期（ms）

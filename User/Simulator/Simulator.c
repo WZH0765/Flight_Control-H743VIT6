@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include "Calib.h"
 #include <string.h>
+#include "GPS.h"
 #include "Flight.h"
 #include "SysTime.h"
 #include "hardware.h"
@@ -164,7 +165,25 @@ void Simulator(void)
     HW_Sample.Pressure    = 101325.0f*powf(1.0f - AltM/44330.0f,5.25588f) + SIM_BAR_NOISE*Simulator_Rand();
     HW_Sample.Temperature = 25.0f;
 
-    printf("SIM,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n",
+    /*仿真的 GPS：机体 NED 位置 → 经纬度（走和真实 GPS 同一条路，上位机不用区分）*/
+    GPS_Data.Fix      = GPS_FIX_3D;
+    GPS_Data.SatNum   = 12;
+    GPS_Data.Altitude = -Sim_P[2];
+
+    GPS_Data.Latitude  = SIM_HOME_LAT + Sim_P[0]/111320.0;      //N → 北纬
+    GPS_Data.Longitude = SIM_HOME_LON + Sim_P[1]/95200.0;       //E → 东经
+
+    GPS_Data.GroundSpeed  = sqrtf(Sim_V[0]*Sim_V[0] + Sim_V[1]*Sim_V[1]);
+    GPS_Data.GroundCourse = atan2f(Sim_V[1],Sim_V[0])*RAD_TO_DEG;
+    if(GPS_Data.GroundCourse < 0.0f) GPS_Data.GroundCourse += 360.0f;
+
+    /*USB CDC 忙的时候 CDC_Transmit_FS 直接丢帧，1kHz 打会占满带宽、久了还会把数据流堵死，
+      降到 100Hz：曲线 1.5s 窗口够看，地图 20Hz 刷新也够*/
+    static uint32_t Tick = 0;
+    if(millis() - Tick < 10) return;
+    Tick = millis();
+
+    printf("SIM,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n",
     (int)(AHRS.Roll *RAD_TO_DEG*10.0f),
     (int)(AHRS.Pitch*RAD_TO_DEG*10.0f),
     (int)(AHRS.Yaw  *RAD_TO_DEG*10.0f),
@@ -173,5 +192,21 @@ void Simulator(void)
     (int)(Sim_W[2]*RAD_TO_DEG*10.0f),
     SimuThro[0],SimuThro[1],SimuThro[2],SimuThro[3],
     (int)(-Sim_P[2]*100.0f),
-    (State == ARM) ? 1 : 0);            //解锁状态，上位机靠它显示
+    (State == ARM) ? 1 : 0,             //解锁状态，上位机靠它显示
+    (int)(Sim_P[0]*100.0f),             //北向位置（cm）
+    (int)(Sim_P[1]*100.0f));            //东向位置（cm）
+
+    /*GPS 和 SIM 挤在同一个任务里：坐标本来就是现成的，单独开个任务不值当*/
+    static uint32_t GpsTick = 0;
+    if(millis() - GpsTick < 100) return;
+    GpsTick = millis();
+
+    printf("GPS,%d,%d,%d,%d,%d,%d,%d\r\n",
+    GPS_Data.Fix,
+    GPS_Data.SatNum,
+    (int)(GPS_Data.Latitude *1e7),
+    (int)(GPS_Data.Longitude*1e7),
+    (int)(GPS_Data.Altitude *100.0f),
+    (int)(GPS_Data.GroundSpeed *100.0f),
+    (int)(GPS_Data.GroundCourse));
 }

@@ -17,6 +17,10 @@
 #define SIM_GYR_NOISE 0.002f    //rad/s，约 0.11°/s，接近 ICM42605 在 1kHz 下的实际噪声
 #define SIM_BAR_NOISE 0.200f    //Pa，折算约 ±1.6cm，给气压计一点真实噪声
 
+/*仿真的 GPS home 点（上海人民广场）：纬度 1° ≈ 111320m、经度 1° ≈ 95200m*/
+#define SIM_HOME_LAT  31.2304
+#define SIM_HOME_LON  121.4737
+
 extern uint16_t SimuThro[4];
 
 void Simulator(void);

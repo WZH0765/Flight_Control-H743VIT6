@@ -6,9 +6,9 @@
 
 typedef enum
 {
-    GPS_FIX_2D,             //二维定位
-    GPS_FIX_3D,             //三维定位
-    GPS_FIX_INVALID = 0     //未定位
+    GPS_FIX_INVALID = 0,    //未定位
+    GPS_FIX_2D      = 1,    //二维定位
+    GPS_FIX_3D      = 2     //三维定位
 
 } gpsFix_e;
 

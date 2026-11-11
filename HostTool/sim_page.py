@@ -14,9 +14,10 @@ from PyQt5.QtWidgets import (
 
 from attitude_indicator import AttitudeIndicator
 from config import (
-    DATA_LEN, PAGE_SIM, RC_KEY_STEP, SIM_COLOR, SIM_FIELDS, SIM_IDX_M1,
-    SIM_MISS_MAX, SIM_PLOT_H,
+    DATA_LEN, PAGE_SIM, RC_KEY_STEP, SIM_COLOR, SIM_FIELDS, SIM_IDX_E,
+    SIM_IDX_M1, SIM_IDX_N, SIM_MISS_MAX, SIM_PLOT_H,
 )
+from virtual_map import VirtualMap
 from widgets import StickPad
 
 
@@ -39,6 +40,7 @@ class SimPageMixin:
             plot.setYRange(y_min, y_max, padding=0)
             plot.setXRange(0, DATA_LEN - 1, padding=0)
             plot.setMinimumHeight(SIM_PLOT_H)
+            plot.setMaximumHeight(200)          # 别把下面的地图挤没了
 
     def _build_sim_row(self):
         """顶部一行：解锁按钮 + 数字读数，整体居中"""
@@ -48,15 +50,14 @@ class SimPageMixin:
         self.arm_button.clicked.connect(self._on_arm_clicked)
         self.arm_button.setEnabled(False)          # 没连接之前不许切换
 
-        self.sim_numbers = QLabel("高度  --cm    油门  --‰    姿态  --/--")
+        self.sim_numbers = QLabel("高度  --cm    油门  --‰    姿态  --/--    位置  北 --  东 --")
         self.sim_numbers.setStyleSheet("font-size: 9pt; font-family: Consolas, monospace;")
-        self.sim_numbers.setMinimumWidth(260)
 
         row = QHBoxLayout()
         row.setSpacing(12)
         row.addStretch(1)
         row.addWidget(self.arm_button)
-        row.addWidget(self.sim_numbers)
+        row.addWidget(self.sim_numbers)              # 高度/油门/姿态/位置合成一行
         row.addStretch(1)
 
         return row
@@ -106,10 +107,17 @@ class SimPageMixin:
         grid.addWidget(self.sim_thr_plot, 1, 0)
         grid.addWidget(self.sim_alt_plot, 1, 1)
 
+        right = QVBoxLayout()
+        right.setSpacing(8)
+        right.addLayout(grid)                           # 四张曲线
+
+        self.vmap = VirtualMap()                        # 虚拟地图：不用联网
+        right.addWidget(self.vmap, 1)
+
         body = QHBoxLayout()
         body.setSpacing(10)
         body.addLayout(left_col)
-        body.addLayout(grid, 1)
+        body.addLayout(right, 1)
 
         self._build_sim_curves()
 
@@ -175,6 +183,8 @@ class SimPageMixin:
                 "m4":    int(parts[SIM_IDX_M1 + 3]),
                 "alt":   int(parts[11]),
                 "arm":   int(parts[12]),
+                "n":     int(parts[SIM_IDX_N]) / 100.0,
+                "e":     int(parts[SIM_IDX_E]) / 100.0,
             }
         except (ValueError, IndexError):
             return
@@ -195,6 +205,8 @@ class SimPageMixin:
             self.sim_miss += 1
 
         if self.sim_miss >= SIM_MISS_MAX:
+            if self.sim_miss == SIM_MISS_MAX:
+                self.sim_numbers.setText("无数据 —— 1 秒没收到 SIM 帧")
             return                      # 掉线就不刷了
 
         if self.stackedWidget.currentIndex() != PAGE_SIM:
@@ -202,8 +214,10 @@ class SimPageMixin:
 
         d = self.sim_latest
 
-        self.sim_numbers.setText("高度 %4d cm    油门 %4d ‰    姿态 %+4d / %+4d"
-                                 % (d["alt"], d["m1"], d["roll"], d["pitch"]))
+        self.sim_numbers.setText("高度 %4d cm   油门 %4d ‰   姿态 %+3d / %+3d   位置 北 %+6.1f  东 %+6.1f m"
+                                 % (d["alt"], d["m1"], d["roll"], d["pitch"], d["n"], d["e"]))
+
+        self.vmap.set_position(d["n"], d["e"], d["yaw"], d["alt"] / 100.0, True)
 
         self.sim_ahi.set_attitude(d["roll"], d["pitch"], d["yaw"])
 
@@ -282,8 +296,11 @@ class SimPageMixin:
 
     # ------------------------------------------------------------ 键盘
     def _key_step(self):
-        if not self.keys_down or self.stackedWidget.currentIndex() != PAGE_SIM:
+        if not self.keys_down:
             return
+
+        if self.stackedWidget.currentIndex() != PAGE_SIM:
+            return                      # 别的页面敲键不动摇杆
 
         left  = self.stick_left
         right = self.stick_right
