@@ -11,9 +11,6 @@ import json
 import urllib.request
 
 from PyQt5.QtCore import QThread, pyqtSignal
-from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QWidget
-
-from osm_map import OsmMap
 
 # 免费、无需 key 的 IP 定位（按顺序试）
 IP_SERVICES = (
@@ -69,23 +66,10 @@ class GpsMixin:
 
     # ------------------------------------------------------------ 独立的 Gps 页
     def _build_gps_page(self):
-        self.page_gps = QWidget()
-        self.page_gps.setObjectName("page_gps")
+        """页面和导航按钮都在 .ui 里，这里只算索引、连信号"""
+        self._page_gps_idx = self.stackedWidget.indexOf(self.page_gps)
 
-        layout = QVBoxLayout(self.page_gps)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
-
-        self.gps_map_big = OsmMap(cache_max=150)      # 只有一块屏，缓存小一点
-        layout.addWidget(self.gps_map_big, 1)
-
-        self._page_gps_idx = self.stackedWidget.addWidget(self.page_gps)
-
-        self.btn_gps = QPushButton("Gps")
-        self.btn_gps.setFixedSize(40, 40)
-        self.btn_gps.setCheckable(True)
-        self.btn_gps.setFont(self.btn_config.font())
-        self.verticalLayout.insertWidget(3, self.btn_gps)
+        self.gps_map_big.cache_max = 150              # 只有一块屏，缓存小一点
         self.btn_gps.clicked.connect(lambda _, i=self._page_gps_idx: self._switch_page(i))
 
         self._init_gps()

@@ -13,7 +13,7 @@
 #define ALT_ERR_MAX   200.0f    //误差参与运算上限
 #define ALT_RATE_MAX  200.0f    //爬升率参与运算上限
 
-#define LP_ALT    0.10f     //高度低通（原来 0.15）
+#define LP_ALT    0.10f     //高度低通
 #define LP_RATE   0.05f     //升降速度低通
 
 #define CLAMP(Val,Limit)        (fmaxf(-(Limit),fminf((Limit),(Val))))
