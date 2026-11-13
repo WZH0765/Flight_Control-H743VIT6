@@ -1,6 +1,7 @@
 #include "gpio.h"
 #include "Task.h"
 #include "AHRS.h"
+#include "PVRS.h"
 #include "Calib.h"
 #include "Flight.h"
 #include "SysTime.h"
@@ -15,7 +16,7 @@ void LED_Blink(void)
     HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
 }
 
-void AHRS_Ctrl(void)
+void AHRS_Est(void)
 {
     uint32_t Now = micros();
     static uint32_t Last = 0;
@@ -53,6 +54,26 @@ void AHRS_Ctrl(void)
                 HW_Body.Mag[0],HW_Body.Mag[1],HW_Body.Mag[2],dt);
 }
 
+void PVRS_Est(void)
+{
+    uint32_t Now = micros();
+    static uint32_t Last = 0;
+
+    if(Last == 0)           //第一次执行记为无效
+    {
+        Last = Now;
+        return;
+    }
+
+    float dt = (Now - Last)*1e-6f;
+    Last = Now;
+    if(dt < 0.0048f || dt > 0.0052f) return;        //保护执行周期5ms
+
+    PVRS_Update(HW_Body.Acc[0],HW_Body.Acc[1],HW_Body.Acc[2],dt);
+
+    if(State != ARM) PVRS_Still();
+}
+
 void FLT_Ctrl(void)
 {
     uint32_t Now = micros();
@@ -79,7 +100,8 @@ void Task_Init(void)
 #ifdef USE_SIM
     Scheduler_Add("SIMULATOR" ,Simulator,1000   ,TASK_PRIORITY_REALTIME);
 #endif
-    Scheduler_Add("AHRS_CTRL" ,AHRS_Ctrl,1000   ,TASK_PRIORITY_HIGH    );
+    Scheduler_Add("AHRS_EST"  ,AHRS_Est ,1000   ,TASK_PRIORITY_HIGH    );
+    Scheduler_Add("PVRS_EST"  ,PVRS_Est ,5000   ,TASK_PRIORITY_HIGH    );
     Scheduler_Add("FLT_CTRL"  ,FLT_Ctrl ,1000   ,TASK_PRIORITY_HIGH    );
 #ifndef USE_SIM
     Scheduler_Add("IMU_READ"  ,IMU_Read ,1000   ,TASK_PRIORITY_REALTIME);

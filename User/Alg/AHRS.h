@@ -19,4 +19,5 @@ typedef struct
 
 extern euler_t AHRS;
 
+void AHRS_Init(void);
 void AHRS_Update(float Ax,float Ay,float Az,float Gx,float Gy,float Gz,float Mx,float My,float Mz,float dt);

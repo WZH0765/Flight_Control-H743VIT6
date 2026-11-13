@@ -1,6 +1,7 @@
 #include "PID.h"
 #include <math.h>
 #include "AHRS.h"
+#include "PVRS.h"
 #include "Motor.h"
 #include "Calib.h"
 #include "Flight.h"
@@ -42,7 +43,10 @@ void Flight_Init(void)
     RC_SetRoll  = 0.0f;
     RC_SetPitch = 0.0f;
 
+    AHRS_Init();
+    PVRS_Init();
     Height_Init();
+
     PID_Init(&PID_YawRate  ,Kp[0],Ki[0],Kd[0]);
     PID_Init(&PID_RollRate ,Kp[1],Ki[1],Kd[1]);
     PID_Init(&PID_PitchRate,Kp[2],Ki[2],Kd[2]);

@@ -2,6 +2,8 @@
 #include <math.h>
 #include "Hardware.h"
 
+/*Attitude and Heading Reference System - 姿态估计器*/
+
 /******************
 *    算法物理坐标-标准NED
 *         X
@@ -22,6 +24,22 @@ euler_t AHRS = {0};
 
 static float Gx_Bias = 0,Gy_Bias = 0,Gz_Bias = 0;
 static float q0 = 1.0f,q1 = 0.0f,q2 = 0.0f,q3 = 0.0f;
+
+void AHRS_Init(void)
+{
+    q0 = 1.0f;
+    q1 = 0.0f;
+    q2 = 0.0f;
+    q3 = 0.0f;
+
+    Gx_Bias = 0.0f;
+    Gy_Bias = 0.0f;
+    Gz_Bias = 0.0f;
+
+    AHRS.Yaw   = 0.0f;
+    AHRS.Roll  = 0.0f;
+    AHRS.Pitch = 0.0f;
+}
 
 void AHRS_Update(float Ax,float Ay,float Az,float Gx,float Gy,float Gz,float Mx,float My,float Mz,float dt)
 {
