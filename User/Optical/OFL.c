@@ -1,4 +1,5 @@
 #include "OFL.h"
+#include "Crc.h"
 #include "usart.h"
 #include <string.h>
 #include "Hardware.h"
@@ -10,14 +11,6 @@ static uint8_t OFL_Count = 0;
 
 __attribute__((section(".dma_buffer")))
 uint8_t OFL_RxBuffer[64];
-
-static uint8_t OFL_Xor(uint8_t *Buf,uint8_t Len)
-{
-    uint8_t Sum = 0;
-    while(Len --) Sum ^= *Buf ++;
-
-    return Sum;
-}
 
 void OFL_Start(void)
 {
@@ -75,7 +68,7 @@ void OFL_Parse(uint8_t *Buffer,uint16_t Len)
         OFL_Buf[OFL_Count ++] = Byte;
         if(OFL_Count < sizeof(OFL_Buf)) continue;
 
-        if(OFL_Buf[17] == 0x55 && OFL_Buf[16] == OFL_Xor(&OFL_Buf[2],14))
+        if(OFL_Buf[17] == 0x55 && OFL_Buf[16] == CRC_Xor(&OFL_Buf[2],14))
         {
             OFL_Frame(OFL_Buf);
         }

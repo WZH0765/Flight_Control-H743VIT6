@@ -1,3 +1,4 @@
+#include "Crc.h"
 #include "Flash.h"
 #include "Calib.h"
 #include <stdint.h>
@@ -16,24 +17,6 @@ _Static_assert(offsetof(flash_t,Crc) == CAL_FLASH_DATA_SIZE, "flash_t crc offset
 *  写入后回读校验，失败则清校准标志。
 ****************/
 
-uint32_t Flash_CRC(const void *Data,uint32_t Length)
-{
-    const uint8_t *p = (const uint8_t *)Data;
-    uint32_t crc = 0xFFFFFFFFU;
-
-    while(Length --)
-    {
-        crc ^= *p ++;
-
-        for(uint8_t i = 0;i < 8;i ++)
-        {
-            crc = (crc >> 1) ^ (0xEDB88320U & (0U - (crc & 1U)));
-        }
-    }
-
-    return ~crc;
-}
-
 bool Flash_Valid(const flash_t *Record)
 {
     if(Record->Size != CAL_FLASH_DATA_SIZE)
@@ -41,7 +24,7 @@ bool Flash_Valid(const flash_t *Record)
         return false;
     }
 
-    return Record->Crc == Flash_CRC(Record,CAL_FLASH_DATA_SIZE);
+    return Record->Crc == CRC32(Record,CAL_FLASH_DATA_SIZE);
 }
 
 void Flash_Load(void)
@@ -111,7 +94,7 @@ bool Flash_Save(void)
     if(IMU_CalValid == true) Record.Flags |= CAL_FLASH_IMU;
     if(MAG_CalValid == true) Record.Flags |= CAL_FLASH_MAG;
 
-    Record.Crc = Flash_CRC(&Record,CAL_FLASH_DATA_SIZE);
+    Record.Crc = CRC32(&Record,CAL_FLASH_DATA_SIZE);
 
     HAL_FLASH_Unlock();
     __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_ALL_ERRORS_BANK2);

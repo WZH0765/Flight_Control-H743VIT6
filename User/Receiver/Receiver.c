@@ -1,18 +1,8 @@
-#include "main.h"
+#include "Crc.h"
 #include "usart.h"
 #include "SysTime.h"
 #include "Receiver.h"
 #include "stm32h7xx_hal.h"
-
-static uint8_t RC_CRC(const uint8_t *data,uint16_t len)
-{
-    uint8_t crc = 0;
-    for(uint16_t i = 0;i < len;i++)
-    {
-        crc = CRC_Table[crc^data[i]];
-    }
-    return crc;
-}
 
 float Map(float input_value,float input_min,float input_max,float Output_min,float Output_max)
 {
@@ -66,7 +56,7 @@ void Receiver_Parse(uint8_t *Input,uint16_t size,rc_data_t *Output)
 {
 	if(Input[1] < 2 || size < Input[1] + 2)return;
 	if(size < 4 || Input[0] != CRSF_ADDRESS_FLIGHT_CONTROLLER)return;
-	if(Input[Input[1] + 1] != RC_CRC(&Input[2],Input[1] - 1))return;
+	if(Input[Input[1] + 1] != CRC8_DvbS2(&Input[2],Input[1] - 1))return;
 
 	LastFrame_Time = millis();
 
