@@ -1,6 +1,7 @@
 #include "SPI.h"
 #include "I2C.h"
 #include "GPS.h"
+#include "OFL.h"
 #include "DPS310.h"
 #include "AT7456E.h"
 #include "IST8310.h"
@@ -12,6 +13,7 @@ health_t ACC_Health;
 health_t GYR_Health;
 health_t MAG_Health;
 health_t BAR_Health;
+health_t OFL_Health;
 
 body_t   HW_Body   = {0};
 sample_t HW_Sample = {0};
@@ -102,10 +104,11 @@ osd_t AT7456E_Device =
 ****************/
 void Hardware_Init(void)
 {
-    Health_Init(&ACC_Health,100);
-    Health_Init(&GYR_Health,100);
-    Health_Init(&MAG_Health,250);
-    Health_Init(&BAR_Health,250);
+    Health_Init(&ACC_Health,100,0  );
+    Health_Init(&GYR_Health,100,0  );
+    Health_Init(&MAG_Health,250,0  );
+    Health_Init(&BAR_Health,250,0  );
+    Health_Init(&OFL_Health,250,200);
 
 #ifdef USE_ICM42605
     if(ICM42605_Detect(&ICM42605_Device1) == true)
@@ -148,6 +151,10 @@ void Hardware_Init(void)
 
 #ifdef USE_GPS
     GPS_Start();
+#endif
+
+#ifdef USE_OFL
+    OFL_Start();
 #endif
 }
 

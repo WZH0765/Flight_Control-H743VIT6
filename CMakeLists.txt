@@ -59,6 +59,7 @@ file(GLOB USER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/User/Flight/*.c"
     "${CMAKE_SOURCE_DIR}/User/Driver/*.c"
     "${CMAKE_SOURCE_DIR}/User/Health/*.c"
+    "${CMAKE_SOURCE_DIR}/User/Optical/*.c"
     "${CMAKE_SOURCE_DIR}/User/Protocol/*.c"
     "${CMAKE_SOURCE_DIR}/User/Receiver/*.c"
     "${CMAKE_SOURCE_DIR}/User/Scheduler/*.c"
@@ -82,6 +83,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/User/Flight
     ${CMAKE_SOURCE_DIR}/User/Driver
     ${CMAKE_SOURCE_DIR}/User/Health
+    ${CMAKE_SOURCE_DIR}/User/Optical
     ${CMAKE_SOURCE_DIR}/User/Protocol
     ${CMAKE_SOURCE_DIR}/User/Receiver
     ${CMAKE_SOURCE_DIR}/User/Scheduler

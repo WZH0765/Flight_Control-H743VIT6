@@ -18,6 +18,7 @@
 #define USE_AT7456E
 #define USE_DPS310
 #define USE_GPS
+#define USE_OFL
 
 /****************** 板级量程换算 ******************/
 #define ACC_SCALE   (2048.0f)               //±16g
@@ -101,6 +102,7 @@ extern health_t ACC_Health;
 extern health_t GYR_Health;
 extern health_t MAG_Health;
 extern health_t BAR_Health;
+extern health_t OFL_Health;     //Optical Flow and Laser
 
 void IMU_Read(void);
 void MAG_Read(void);

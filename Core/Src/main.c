@@ -16,6 +16,7 @@
 /* USER CODE BEGIN Includes */
 
 #include "GPS.h"
+#include "OFL.h"
 #include "Task.h"
 #include "AHRS.h"
 #include "Flash.h"
@@ -257,6 +258,11 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart,uint16_t Size)
 		Receiver_Parse(RC_RxBuffer,Size,&RC_Data);
 		Receiver_Start();
 	}
+	else if(huart->Instance == USART1)
+	{
+		OFL_Parse(OFL_RxBuffer,Size);
+		OFL_Start();
+	}
 	else if(huart->Instance == USART2)
 	{
 		GPS_Parse(GPS_RxBuffer,Size);
@@ -269,6 +275,10 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 	if(huart->Instance == USART6)
 	{
 		Receiver_Start();
+	}
+	else if(huart->Instance == USART1)
+	{
+		OFL_Start();
 	}
 	else if(huart->Instance == USART2)
 	{

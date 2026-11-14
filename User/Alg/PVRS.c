@@ -35,7 +35,7 @@ void PVRS_Init(void)
 /***************
 *  预测
 *
-*  形  参：Ax/Ay/Az 机体系加速度（m/s²），dt 周期（s）
+*  形  参：Ax/Ay/Az 机体系加速度(m/s²),dt 周期(s)
 ****************/
 void PVRS_Update(float Ax,float Ay,float Az,float dt)
 {
@@ -149,8 +149,7 @@ void PVRS_Correct(uint8_t Index,float Meas,float Sigma)
 /***************
 *  光流修正
 *
-*  形  参：Vf/Vr 机体系水平速度（前/右，m/s，光流测的原始方向）
-*  说  明：按航向角转到 NED，倾角小的时候不修正不影响精度
+*  形  参：Vf/Vr 机体系水平速度-(前/右,m/s)
 ****************/
 void PVRS_Flow(float Vf,float Vr)
 {
@@ -163,17 +162,17 @@ void PVRS_Flow(float Vf,float Vr)
 /***************
 *  高度修正
 *
-*  形  参：Alt 离地高度（m，向上为正）
+*  形  参：Alt 离地高度-(向上为正,m)
 ****************/
 void PVRS_Height(float Alt)
 {
-    PVRS_Correct(2,-Alt,R_ALT);             //D 向下为正，高度往上 → 取负
+    PVRS_Correct(2,-Alt,R_ALT);
 }
 
 /***************
 *  静止修正
 *
-*  说  明：落地/手持不动时调用，把三个速度拉回 0，顺便把零偏估准
+*  说  明：落地时调用
 ****************/
 void PVRS_Still(void)
 {
