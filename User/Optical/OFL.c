@@ -5,12 +5,11 @@
 #include "Hardware.h"
 
 ofl_t OFL = {0};
-
-static uint8_t OFL_Buf[18];
-static uint8_t OFL_Count = 0;
+uint8_t OFL_Buf[18];
+uint8_t OFL_Count = 0;
 
 __attribute__((section(".dma_buffer")))
-uint8_t OFL_RxBuffer[64];
+uint8_t OFL_RxBuffer[OFL_RX_SIZE];
 
 void OFL_Start(void)
 {
@@ -50,11 +49,11 @@ static void OFL_Frame(uint8_t *Buf)
     Health_Update(&OFL_Health,(int32_t)(OFL.Vf *1000.0f),(int32_t)(OFL.Vr *1000.0f),(int32_t)(OFL.Alt*1000.0f));
 }
 
-void OFL_Parse(uint8_t *Buffer,uint16_t Len)
+void OFL_Parse(uint8_t *Buf,uint16_t Len)
 {
     for(uint16_t i = 0;i < Len;i ++)
     {
-        uint8_t Byte = Buffer[i];
+        uint8_t Byte = Buf[i];
 
         if(OFL_Count == 0)
         {
