@@ -5,10 +5,9 @@ DATA_LEN     = 150            # 曲线缓存点数
 REFRESH_MS   = 50             # 刷新周期
 DEFAULT_BAUD = 115200
 
-# ---------------- 实机遥测协议（12 字段，逗号分隔）
-IDX_YAW, IDX_ROLL, IDX_PITCH = 0, 1, 2
-IDX_GYR, IDX_ACC, IDX_MAG, IDX_BAR = 8, 9, 10, 11
-PROTOCOL_FIELDS = 12
+# ---------------- 实机遥测（一行 26 字段，含 "DBG" 前缀）
+# DBG,yaw,roll,pitch,hg,ha,hm,hb,ho,hgp,gx,gy,gz,ax,ay,az,mx,my,mz,press,temp,vf,vr,alt,valid,qual
+DBG_FIELDS = 26
 
 # ---------------- 仿真遥测协议（15 字段）
 # SIM,roll,pitch,yaw,gx,gy,gz,m1,m2,m3,m4,alt,arm,north,east   （姿态/角速度 ×10，位置 cm）

@@ -5,7 +5,7 @@ from collections import deque
 import serial.tools.list_ports
 import pyqtgraph as pg
 from PyQt5.QtCore import Qt, QTimer, QSettings, QEvent
-from PyQt5.QtGui import QIcon
+from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QMessageBox,
     QGridLayout, QLabel, QWidget,
@@ -14,16 +14,16 @@ from PyQt5 import uic
 
 from attitude_indicator import AttitudeIndicator
 from config import (
-    DATA_LEN, DEFAULT_BAUD, IDX_ACC, IDX_BAR, IDX_GYR, IDX_MAG, IDX_PITCH,
-    IDX_ROLL, IDX_YAW, PAGE_ABOUT, PAGE_CALIBRATION, PAGE_DASHBOARD, PAGE_HELP,
-    PAGE_SIM, PROTOCOL_FIELDS, RC_SEND_MS, REFRESH_MS, SIM_COLOR, SIM_MISS_MAX,
+    DATA_LEN, DEFAULT_BAUD, PAGE_ABOUT, PAGE_CALIBRATION, PAGE_DASHBOARD, PAGE_HELP,
+    PAGE_SIM, RC_SEND_MS, REFRESH_MS, SIM_COLOR, SIM_MISS_MAX,
 )
 from help_text import HELP_DOCS, HELP_TOPICS
 from gps_page import GpsMixin
+from debug_page import DebugPageMixin
 from serial_thread import SerialThread
 from sim_page import SimPageMixin
 from theme import THEMES, button_style, combo_style, global_style
-from widgets import FACE_TEXT, FaceTile, FACE_COLOR
+from widgets import FACE_TEXT, FaceTile, FACE_COLOR, SensorIcon
 
 # ---------------------------------------------------------------- 常量
 pg.setConfigOptions(antialias=True)
@@ -40,7 +40,7 @@ def resource_path(relative_path: str) -> str:
 UI_PATH = resource_path("FC Configurator.ui")
 
 # ---------------------------------------------------------------- 主窗口
-class MainWindow(SimPageMixin, GpsMixin, QMainWindow):
+class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
 
     def __init__(self):
         super().__init__()
@@ -55,7 +55,7 @@ class MainWindow(SimPageMixin, GpsMixin, QMainWindow):
         self.serial_thread = None
         self.latest = {
             "yaw": 0.0, "roll": 0.0, "pitch": 0.0,
-            "gyr": 1, "acc": 1, "mag": 1, "bar": 1,
+            "gyr": 1, "acc": 1, "mag": 1, "bar": 1, "ofl": 1, "gps": 1,
         }
 
         self.yaw_data   = deque([0] * DATA_LEN, maxlen=DATA_LEN)
@@ -81,6 +81,8 @@ class MainWindow(SimPageMixin, GpsMixin, QMainWindow):
         self._build_attitude_indicator()
         self._build_simulation()
         self._build_gps_page()
+        self._build_debug_page()
+        self._build_health_row()
 
         # --- 定时刷新 ---
         self.refresh_timer = QTimer(self)
@@ -187,6 +189,7 @@ class MainWindow(SimPageMixin, GpsMixin, QMainWindow):
             (self.btn_calibration, PAGE_CALIBRATION),
             (self.btn_config,      PAGE_SIM),
             (self.btn_gps,         self._page_gps_idx),
+            (self.btn_debug,       self._page_debug_idx),
             (self.btn_help,        PAGE_HELP),
             (self.btn_about,       PAGE_ABOUT),
         ]
@@ -490,6 +493,18 @@ class MainWindow(SimPageMixin, GpsMixin, QMainWindow):
             axis.setPen(t["plot_grid"])
             axis.setTextPen(t["plot_text"])
 
+        # Debug 页六张图跟着主题走
+        for plot in self.dbg_plots:
+            plot.setBackground(t["plot_bg"])
+            for ax_name in ("left", "bottom"):
+                axis = plot.getAxis(ax_name)
+                axis.setPen(t["plot_grid"])
+                axis.setTextPen(t["plot_text"])
+
+            plot.setTitle(plot.plotItem.titleLabel.text, color=t["plot_text"])
+            if plot.plotItem.legend is not None:
+                plot.plotItem.legend.setLabelTextColor(t["plot_text"])
+
         # 仿真页四张图跟着主题走（背景、轴线、标题、图例文字）
         for plot, _y_min, _y_max in self.sim_plots:
             plot.setBackground(t["plot_bg"])
@@ -619,23 +634,6 @@ class MainWindow(SimPageMixin, GpsMixin, QMainWindow):
             )
 
     # ============================================================ 数据
-    def _parse_line(self, line: str):
-        parts = line.split(",")
-        if len(parts) != PROTOCOL_FIELDS:
-            return None
-        try:
-            return {
-                "yaw":   float(parts[IDX_YAW]),
-                "roll":  float(parts[IDX_ROLL]),
-                "pitch": float(parts[IDX_PITCH]),
-                "gyr":   int(parts[IDX_GYR]),
-                "acc":   int(parts[IDX_ACC]),
-                "mag":   int(parts[IDX_MAG]),
-                "bar":   int(parts[IDX_BAR]),
-            }
-        except (ValueError, IndexError):
-            return None
-
     def on_data(self, line: str):
         upper = line.upper()
         if upper.startswith("SIM,"):
@@ -650,15 +648,9 @@ class MainWindow(SimPageMixin, GpsMixin, QMainWindow):
         if upper.startswith("CAL,"):
             self._handle_cal_line(line)
             return
-
-        data = self._parse_line(line)
-        if data is None:
+        if upper.startswith("DBG,"):
+            self._handle_dbg_line(line)
             return
-
-        self.latest.update(data)
-        self.yaw_data.append(data["yaw"])
-        self.roll_data.append(data["roll"])
-        self.pitch_data.append(data["pitch"])
 
     def _handle_cal_status(self, line: str):
         parts = line.split(",")
@@ -682,20 +674,49 @@ class MainWindow(SimPageMixin, GpsMixin, QMainWindow):
 
     # ============================================================ 刷新 UI
     def refresh_ui(self):
-        self._update_labels()
         self._update_health()
         self._update_curves()
         self._update_attitude()
         self._update_sim()
+        self._update_debug()
 
-    def _update_labels(self):
-        self.yaw_value.setText(f"{self.latest['yaw']:.1f}°")
-        self.roll_value.setText(f"{self.latest['roll']:.1f}°")
-        self.pitch_value.setText(f"{self.latest['pitch']:.1f}°")
+    # ============================================================ 健康行
+    def _build_health_row(self):
+        """健康行整个由代码建：六组「图标 + 标签」，水平居中"""
+        layout = self.horizontalLayout_3
+        font = QFont("Agency FB", 15)           # 和 .ui 里其它标签同一个字体
+
+        while layout.count():                   # 以防 .ui 里以后又塞了东西
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+
+        layout.addStretch(1)
+
+        for name, text, kind in (("gyr_status", "GYR", "gyr"),
+                                 ("acc_status", "ACC", "acc"),
+                                 ("mag_status", "MAG", "mag"),
+                                 ("bar_status", "BAR", "bar"),
+                                 ("ofl_status", "OFL", "ofl"),
+                                 ("gps_status", "GPS", "gps")):
+            label = QLabel(text)
+            label.setFixedWidth(30)
+            label.setFont(font)
+
+            layout.addWidget(SensorIcon(kind))
+            layout.addWidget(label)
+            layout.addSpacing(30)
+
+            setattr(self, name, label)
+
+        layout.addStretch(1)
 
     def _update_health(self):
         for key, widget in (("gyr", self.gyr_status), ("acc", self.acc_status),
-                            ("mag", self.mag_status), ("bar", self.bar_status)):
+                            ("mag", self.mag_status), ("bar", self.bar_status),
+                            ("ofl", self.ofl_status), ("gps", self.gps_status)):
             color = "green" if self.latest[key] else "red"
             widget.setStyleSheet(f"color: {color}; font-weight: bold;")
 

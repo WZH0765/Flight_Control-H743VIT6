@@ -202,6 +202,36 @@
         </widget>
        </item>
        <item>
+        <widget class="QPushButton" name="btn_debug">
+         <property name="minimumSize">
+          <size>
+           <width>40</width>
+           <height>40</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>40</width>
+           <height>40</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <family>Agency FB</family>
+           <pointsize>12</pointsize>
+           <weight>75</weight>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="text">
+          <string>Debug</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QPushButton" name="btn_help">
          <property name="minimumSize">
           <size>
@@ -585,247 +615,6 @@
              <enum>QFrame::Raised</enum>
             </property>
             <layout class="QHBoxLayout" name="horizontalLayout_3">
-             <item>
-              <widget class="QLabel" name="gyr_status">
-               <property name="minimumSize">
-                <size>
-                 <width>60</width>
-                 <height>0</height>
-                </size>
-               </property>
-               <property name="maximumSize">
-                <size>
-                 <width>60</width>
-                 <height>16777215</height>
-                </size>
-               </property>
-               <property name="font">
-                <font>
-                 <family>Agency FB</family>
-                 <pointsize>15</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>GYR</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="acc_status">
-               <property name="minimumSize">
-                <size>
-                 <width>60</width>
-                 <height>0</height>
-                </size>
-               </property>
-               <property name="maximumSize">
-                <size>
-                 <width>60</width>
-                 <height>16777215</height>
-                </size>
-               </property>
-               <property name="font">
-                <font>
-                 <family>Agency FB</family>
-                 <pointsize>15</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>ACC</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="mag_status">
-               <property name="minimumSize">
-                <size>
-                 <width>60</width>
-                 <height>0</height>
-                </size>
-               </property>
-               <property name="maximumSize">
-                <size>
-                 <width>60</width>
-                 <height>16777215</height>
-                </size>
-               </property>
-               <property name="font">
-                <font>
-                 <family>Agency FB</family>
-                 <pointsize>15</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>MAG</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="bar_status">
-               <property name="minimumSize">
-                <size>
-                 <width>30</width>
-                 <height>0</height>
-                </size>
-               </property>
-               <property name="maximumSize">
-                <size>
-                 <width>30</width>
-                 <height>16777215</height>
-                </size>
-               </property>
-               <property name="font">
-                <font>
-                 <family>Agency FB</family>
-                 <pointsize>15</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>BAR</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <spacer name="horizontalSpacer">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <property name="sizeType">
-                <enum>QSizePolicy::Fixed</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>30</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
-             <item>
-              <widget class="QFrame" name="line_frame">
-               <property name="minimumSize">
-                <size>
-                 <width>1</width>
-                 <height>40</height>
-                </size>
-               </property>
-               <property name="maximumSize">
-                <size>
-                 <width>1</width>
-                 <height>40</height>
-                </size>
-               </property>
-               <property name="frameShape">
-                <enum>QFrame::VLine</enum>
-               </property>
-               <property name="frameShadow">
-                <enum>QFrame::Raised</enum>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <spacer name="horizontalSpacer_8">
-               <property name="orientation">
-                <enum>Qt::Horizontal</enum>
-               </property>
-               <property name="sizeType">
-                <enum>QSizePolicy::Fixed</enum>
-               </property>
-               <property name="sizeHint" stdset="0">
-                <size>
-                 <width>30</width>
-                 <height>20</height>
-                </size>
-               </property>
-              </spacer>
-             </item>
-             <item>
-              <widget class="QLabel" name="roll_label">
-               <property name="font">
-                <font>
-                 <family>Agency FB</family>
-                 <pointsize>15</pointsize>
-                 <weight>50</weight>
-                 <italic>true</italic>
-                 <bold>false</bold>
-                </font>
-               </property>
-               <property name="text">
-                <string>ROLL</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="roll_value">
-               <property name="font">
-                <font>
-                 <family>Agency FB</family>
-                 <pointsize>12</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>0.0°</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="pitch_label">
-               <property name="font">
-                <font>
-                 <family>Agency FB</family>
-                 <pointsize>15</pointsize>
-                 <weight>50</weight>
-                 <italic>true</italic>
-                 <bold>false</bold>
-                </font>
-               </property>
-               <property name="text">
-                <string>PITCH</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="pitch_value">
-               <property name="font">
-                <font>
-                 <family>Agency FB</family>
-                 <pointsize>12</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>0.0°</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="yaw_label">
-               <property name="font">
-                <font>
-                 <family>Agency FB</family>
-                 <pointsize>15</pointsize>
-                 <weight>50</weight>
-                 <italic>true</italic>
-                 <bold>false</bold>
-                </font>
-               </property>
-               <property name="text">
-                <string>YAW</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="yaw_value">
-               <property name="font">
-                <font>
-                 <family>Agency FB</family>
-                 <pointsize>12</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>0.0°</string>
-               </property>
-              </widget>
-             </item>
             </layout>
            </widget>
           </item>
@@ -1482,6 +1271,22 @@
           <item>
            <widget class="OsmMap" name="gps_map_big"/>
           </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="page_debug">
+         <layout class="QVBoxLayout" name="debug_layout">
+          <property name="leftMargin">
+           <number>12</number>
+          </property>
+          <property name="topMargin">
+           <number>12</number>
+          </property>
+          <property name="rightMargin">
+           <number>12</number>
+          </property>
+          <property name="bottomMargin">
+           <number>12</number>
+          </property>
          </layout>
         </widget>
        </widget>

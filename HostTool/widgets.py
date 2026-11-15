@@ -96,6 +96,80 @@ class FaceIcon(QWidget):
         painter.end()
 
 
+class SensorIcon(QWidget):
+    """22×22 的单线图标，参考 INAV 的传感器图形语言：
+    陀螺=原子轨道、加计=三轴箭头、磁=指北箭头+N、气压=温度计、
+    光流=镜头+波纹、GPS=卫星"""
+
+    def __init__(self, kind: str, parent=None):
+        super().__init__(parent)
+        self.kind = kind
+        self.color = QColor("#22b8cf")
+        self.setFixedSize(24, 24)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+
+        pen = QPen(self.color, 1.4)
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(Qt.NoBrush)
+
+        c = self.rect().center()
+        x, y = c.x() + 0.5, c.y() + 0.5
+
+        if self.kind == "gyr":                      # 原子轨道
+            for angle in (35, -35):
+                p.save()
+                p.translate(x, y)
+                p.rotate(angle)
+                p.drawEllipse(QRectF(-7.5, -3.4, 15, 6.8))
+                p.restore()
+
+            p.setBrush(self.color)
+            p.drawEllipse(QPointF(x, y), 1.3, 1.3)
+        elif self.kind == "acc":                    # 三轴箭头
+            p.drawLine(QPointF(x, y + 3), QPointF(x, y - 7))
+            p.drawLine(QPointF(x, y - 7.5), QPointF(x - 2.6, y - 4))
+            p.drawLine(QPointF(x, y - 7.5), QPointF(x + 2.6, y - 4))
+
+            for dx in (-1, 1):
+                p.drawLine(QPointF(x, y + 3), QPointF(x + dx * 6.2, y + 7.4))
+                p.drawLine(QPointF(x + dx * 6.6, y + 7.6), QPointF(x + dx * 5.0, y + 4.2))
+                p.drawLine(QPointF(x + dx * 6.6, y + 7.6), QPointF(x + dx * 3.0, y + 6.2))
+        elif self.kind == "mag":                    # 指北箭头 + N
+            p.drawLine(QPointF(x, y - 9), QPointF(x, y - 2))
+            p.drawLine(QPointF(x, y - 9), QPointF(x - 2.6, y - 5))
+            p.drawLine(QPointF(x, y - 9), QPointF(x + 2.6, y - 5))
+
+            # N 也用线画，和整体单线风格一致
+            nx, ny = x, y + 4.5
+            p.drawLine(QPointF(nx - 3, ny + 3.2), QPointF(nx - 3, ny - 3.2))
+            p.drawLine(QPointF(nx - 3, ny - 3.2), QPointF(nx + 3, ny + 3.2))
+            p.drawLine(QPointF(nx + 3, ny + 3.2), QPointF(nx + 3, ny - 3.2))
+        elif self.kind == "bar":                    # 温度计
+            p.drawLine(QPointF(x, y - 7.5), QPointF(x, y + 1.6))
+            p.drawEllipse(QPointF(x, y + 4.2), 2.6, 2.6)
+
+            for ty in (-4.5, -1.5, 1.5):
+                p.drawLine(QPointF(x - 5, y + ty), QPointF(x - 2.6, y + ty))
+        elif self.kind == "ofl":                    # 镜头 + 下方波纹
+            p.drawRoundedRect(QRectF(x - 7, y - 8.5, 14, 9), 1.6, 1.6)
+            p.drawEllipse(QPointF(x, y - 4), 2.3, 2.3)
+
+            for i, half in enumerate((2.4, 4.4, 6.4)):
+                p.drawArc(QRectF(x - half, y + 1.6 - i * 0.4, half * 2, 6),
+                          200 * 16, 140 * 16)
+        elif self.kind == "gps":                    # 定位针
+            p.drawEllipse(QPointF(x, y - 3), 4.6, 4.6)
+            p.drawLine(QPointF(x - 3.5, y + 0.6), QPointF(x, y + 8))
+            p.drawLine(QPointF(x + 3.5, y + 0.6), QPointF(x, y + 8))
+            p.setBrush(self.color)
+            p.drawEllipse(QPointF(x, y - 3), 1.3, 1.3)
+
+
 class FaceTile(QFrame):
 
     def __init__(self, face: int, parent=None):

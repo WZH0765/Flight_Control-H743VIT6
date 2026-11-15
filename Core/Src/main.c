@@ -4,6 +4,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dma.h"
+#include "hardware.h"
 #include "i2c.h"
 #include "sdmmc.h"
 #include "spi.h"
@@ -43,10 +44,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-// #define USER_DEBUG_AHRS
-// #define USER_DEBUG_DEVICE
-
 #ifndef USE_SIM
+// #define USER_DEBUG_DEVICE
 #define USER_DEBUG_HOST_TOOL
 #endif
 
@@ -123,24 +122,13 @@ int main(void)
   {
     Scheduler_Run();
 
-#ifdef USER_DEBUG_AHRS
-    static uint32_t tick = 0;
-    if(millis() - tick >= 100)
-    {
-      tick = millis();
-      printf("Yaw: %6.1f°| Roll: %6.1f°| Pitch: %6.1f° \r\n",
-      AHRS.Yaw  *57.2958f,
-      AHRS.Roll *57.2958f,
-      AHRS.Pitch*57.2958f);
-    }
-#endif
-
 #ifdef USER_DEBUG_DEVICE
     static uint32_t tick = 0;
     if(millis() - tick >= 100)
     {
       tick = millis();
-      printf("GYR: %6.3f %6.3f %6.3f | ACC: %6.2f %6.2f %6.2f | MAG: %5.0f %5.0f %5.0f | BAR: %.1f Pa %.1f C | HEALTH: %d %d %d %d\r\n",
+      printf("GYR: %6.3f %6.3f %6.3f | ACC: %6.2f %6.2f %6.2f | MAG: %5.0f %5.0f %5.0f | BAR: %.1f Pa %.1f C | OFL: %5d %5d %5d | HEALTH: %d %d %d %d %d\r\n",
+/********板载外设********/
       HW_Sample.Gyr[0],
       HW_Sample.Gyr[1],
       HW_Sample.Gyr[2],
@@ -152,32 +140,60 @@ int main(void)
       HW_Sample.Mag[2],
       HW_Sample.Pressure,
       HW_Sample.Temperature,
+/********外部外设********/
+      (int)(OFL.Vf *1000.0f),
+      (int)(OFL.Vr *1000.0f),
+      (int)(OFL.Alt*1000.0f),
+/********健康状态********/
       Health_Status(&GYR_Health),
       Health_Status(&ACC_Health),
       Health_Status(&MAG_Health),
-      Health_Status(&BAR_Health));
+      Health_Status(&BAR_Health),
+      Health_Status(&OFL_Health));
     }
 #endif
 
 #ifdef USER_DEBUG_HOST_TOOL
-    char buffer[128] = {0};
-    static uint32_t tick = 0;
-    if(millis() - tick >= 100)
+    char buffer[256] = {0};
+    static uint32_t send_tick = 0;
+    if(millis() - send_tick >= 100)
     {
-      tick = millis();
-      int length = snprintf(buffer,sizeof(buffer),"%.1f,%.1f,%.1f,%.0f,%.0f,%.0f,%.1f,%.1f,%d,%d,%d,%d\n",
-      AHRS.Yaw  *57.2958f,
-      AHRS.Roll *57.2958f,
-      AHRS.Pitch*57.2958f,
-      HW_Sample.Mag[0],
-      HW_Sample.Mag[1],
-      HW_Sample.Mag[2],
-      HW_Sample.Pressure,
-      HW_Sample.Temperature,
+      send_tick = millis();
+
+      int length = snprintf(buffer,sizeof(buffer),
+      "DBG,%d,%d,%d,%d,%d,%d,"
+      "%d,%d,%d,%d,%d,%d,"
+      "%d,%d,%d,%d,%d,%d,"
+      "%d,%d,%d,%d,%d,%d,"
+      "%d\r\n",
+/********姿态健康********/
+      (int)(AHRS.Yaw  *RAD_TO_DEG*10.0f),
+      (int)(AHRS.Roll *RAD_TO_DEG*10.0f),
+      (int)(AHRS.Pitch*RAD_TO_DEG*10.0f),
       Health_Status(&GYR_Health),
       Health_Status(&ACC_Health),
       Health_Status(&MAG_Health),
-      Health_Status(&BAR_Health));
+      Health_Status(&BAR_Health),
+      Health_Status(&OFL_Health),
+      Health_Status(&GPS_Health),
+/********板载外设********/
+      (int)(HW_Sample.Gyr[0]*573.0f),
+      (int)(HW_Sample.Gyr[1]*573.0f),
+      (int)(HW_Sample.Gyr[2]*573.0f),
+      (int)(HW_Sample.Acc[0]*100.0f),
+      (int)(HW_Sample.Acc[1]*100.0f),
+      (int)(HW_Sample.Acc[2]*100.0f),
+      (int)HW_Sample.Mag[0],
+      (int)HW_Sample.Mag[1],
+      (int)HW_Sample.Mag[2],
+      (int)HW_Sample.Pressure,
+      (int)(HW_Sample.Temperature*10.0f),
+/********外部外设********/
+      (int)(OFL.Vf *1000.0f),
+      (int)(OFL.Vr *1000.0f),
+      (int)(OFL.Alt*1000.0f),
+      OFL.Valid ? 1 : 0,
+      OFL.Quality);
 
       CDC_Transmit_FS((uint8_t *)buffer,length);
     }

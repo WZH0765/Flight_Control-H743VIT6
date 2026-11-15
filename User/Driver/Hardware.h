@@ -102,7 +102,8 @@ extern health_t ACC_Health;
 extern health_t GYR_Health;
 extern health_t MAG_Health;
 extern health_t BAR_Health;
-extern health_t OFL_Health;     //Optical Flow and Laser
+extern health_t OFL_Health;
+extern health_t GPS_Health;
 
 void IMU_Read(void);
 void MAG_Read(void);

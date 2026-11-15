@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define USE_SIM
+// #define USE_SIM
 
 /****************** 机体参数（典型 5 寸机） ******************/
 #define SIM_ARM       0.078f    //电机到机身的 x/y 投影距离（m），轴距约 220mm

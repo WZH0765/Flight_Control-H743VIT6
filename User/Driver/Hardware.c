@@ -14,6 +14,7 @@ health_t GYR_Health;
 health_t MAG_Health;
 health_t BAR_Health;
 health_t OFL_Health;
+health_t GPS_Health;
 
 body_t   HW_Body   = {0};
 sample_t HW_Sample = {0};
@@ -109,6 +110,7 @@ void Hardware_Init(void)
     Health_Init(&MAG_Health,250,0  );
     Health_Init(&BAR_Health,250,0  );
     Health_Init(&OFL_Health,250,200);
+    Health_Init(&GPS_Health,250,200);
 
 #ifdef USE_ICM42605
     if(ICM42605_Detect(&ICM42605_Device1) == true)

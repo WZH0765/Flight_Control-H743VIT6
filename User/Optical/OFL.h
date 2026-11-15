@@ -11,8 +11,8 @@
 
 #define OFL_VALID     0xF5
 
-#define OFL_SIGN_X    (-1.0f)       //光流 X 轴方向
-#define OFL_SIGN_Y    ( 1.0f)       //光流 Y 轴方向
+#define OFL_SIGN_X    ( 1.0f)       //光流 X 轴方向-往右为正
+#define OFL_SIGN_Y    (-1.0f)       //光流 Y 轴方向-往前为正
 
 #define OFL_RX_SIZE    64
 

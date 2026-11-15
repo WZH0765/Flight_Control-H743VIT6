@@ -3,6 +3,7 @@
 #include <string.h>
 #include "minmea.h"
 #include "SysTime.h"
+#include "Hardware.h"
 
 gpsData_t GPS_Data;
 static gpsData_t GPS_Buf;
@@ -79,6 +80,8 @@ static void GPS_ParseLine(char *Line)
 
     GPS_Buf.TimeStamp = millis();
     GPS_Data = GPS_Buf;
+
+    Health_Update(&GPS_Health,(int32_t)(GPS_Data.Latitude),(int32_t)(GPS_Data.Longitude),GPS_Data.SatNum);
 }
 
 /***************
