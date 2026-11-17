@@ -3,7 +3,7 @@ from collections import deque
 from config import DATA_LEN, DBG_FIELDS
 from PyQt5.QtWidgets import QGridLayout, QLabel
 
-DBG_PLOT_H  = 150
+DBG_PLOT_H  = 130
 
 DBG_COLOR = {
     "x": "#ff6b81", "y": "#2ed573", "z": "#1e90ff",
@@ -15,7 +15,8 @@ class DebugPageMixin:
     """MainWindow 的 Debug 页（要求宿主有 self.page_debug）。"""
 
     _dbg_keys = ("gx", "gy", "gz", "ax", "ay", "az",
-                 "mx", "my", "mz", "press", "temp", "vf", "vr", "alt", "qual")
+                 "mx", "my", "mz", "press", "temp", "vf", "vr", "alt", "qual",
+                 "pn", "pe")
 
     # ------------------------------------------------------------ 搭页面
     def _build_debug_page(self):
@@ -37,9 +38,10 @@ class DebugPageMixin:
         self.dbg_bar = self._make_dbg_plot("相对气压 Pa")
         self.dbg_vel = self._make_dbg_plot("光流速度 m/s",     (-2.0,  2.0))
         self.dbg_alt = self._make_dbg_plot("光流高度 m")
+        self.dbg_pos = self._make_dbg_plot("PVRS 估计位置 m")      # 北/东两条
 
         self.dbg_plots = (self.dbg_gyr, self.dbg_acc, self.dbg_mag,
-                          self.dbg_bar, self.dbg_vel, self.dbg_alt)
+                          self.dbg_bar, self.dbg_vel, self.dbg_alt, self.dbg_pos)
 
         self.dbg_curves = {
             "gx": self.dbg_gyr.plot(pen=pg.mkPen(DBG_COLOR["x"], width=2), name="Gx"),
@@ -60,6 +62,9 @@ class DebugPageMixin:
             "vr": self.dbg_vel.plot(pen=pg.mkPen(DBG_COLOR["vr"], width=2), name="右向"),
 
             "alt": self.dbg_alt.plot(pen=pg.mkPen(DBG_COLOR["alt"], width=2), name="高度"),
+
+            "pn": self.dbg_pos.plot(pen=pg.mkPen(DBG_COLOR["y"], width=2), name="北"),
+            "pe": self.dbg_pos.plot(pen=pg.mkPen(DBG_COLOR["z"], width=2), name="东"),
         }
 
         grid = QGridLayout()
@@ -70,6 +75,7 @@ class DebugPageMixin:
         grid.addWidget(self.dbg_bar, 1, 1)
         grid.addWidget(self.dbg_vel, 2, 0)
         grid.addWidget(self.dbg_alt, 2, 1)
+        grid.addWidget(self.dbg_pos, 3, 0, 1, 2)          # 位置横跨两列
 
         box.addLayout(grid, 1)
 
@@ -107,21 +113,22 @@ class DebugPageMixin:
 
         # 姿态和健康位也喂给主页面，实机就只用这一行遥测
         self.latest.update(yaw=yaw, roll=roll, pitch=pitch,
-                           gyr=v[3], acc=v[4], mag=v[5], bar=v[6],
-                           ofl=v[7], gps=v[8])
+                           gyr=v[5], acc=v[6], mag=v[7], bar=v[8],
+                           ofl=v[9], gps=v[10])
         self.yaw_data.append(yaw)
         self.roll_data.append(roll)
         self.pitch_data.append(pitch)
 
         values = {
-            "gx": v[9] / 10.0, "gy": v[10] / 10.0, "gz": v[11] / 10.0,     # 0.1°/s
-            "ax": v[12] / 100.0, "ay": v[13] / 100.0, "az": v[14] / 100.0,  # cm/s²
-            "mx": float(v[15]), "my": float(v[16]), "mz": float(v[17]),     # LSB
-            "press": float(v[18]),                                          # Pa
-            "temp": v[19] / 10.0,                                           # 0.1℃
-            "vf": v[20] / 1000.0, "vr": v[21] / 1000.0,                     # mm/s
-            "alt": v[22] / 1000.0,                                          # mm
-            "qual": float(v[24]),
+            "gx": v[11] / 10.0, "gy": v[12] / 10.0, "gz": v[13] / 10.0,    # 0.1°/s
+            "ax": v[14] / 100.0, "ay": v[15] / 100.0, "az": v[16] / 100.0,  # cm/s²
+            "mx": float(v[17]), "my": float(v[18]), "mz": float(v[19]),     # LSB
+            "press": float(v[20]),                                          # Pa
+            "temp": v[21] / 10.0,                                           # 0.1℃
+            "vf": v[22] / 1000.0, "vr": v[23] / 1000.0,                     # mm/s
+            "alt": v[24] / 1000.0,                                          # mm
+            "qual": float(v[26]),
+            "pn": v[3] / 100.0, "pe": v[4] / 100.0,                         # cm
         }
 
         if self._press_ref is None:
@@ -131,7 +138,7 @@ class DebugPageMixin:
         for key, value in values.items():
             self.dbg_data[key].append(value)
 
-        self.dbg_valid = (v[23] == 1)
+        self.dbg_flow_q = v[25]          # 光流置信度 0/100
 
     def _update_debug(self):
         if self.stackedWidget.currentIndex() != self._page_debug_idx:
@@ -140,7 +147,7 @@ class DebugPageMixin:
         for key, curve in self.dbg_curves.items():
             curve.setData(list(self.dbg_data[key]))
 
-        self.dbg_info.setText("温度 %.1f ℃   光流质量 %d   %s"
+        self.dbg_info.setText("温度 %.1f ℃   激光质量 %d   光流 %d"
                               % (self.dbg_data["temp"][-1],
                                  self.dbg_data["qual"][-1],
-                                 "valid" if getattr(self, "dbg_valid", False) else "invalid"))
+                                 getattr(self, "dbg_flow_q", 0)))

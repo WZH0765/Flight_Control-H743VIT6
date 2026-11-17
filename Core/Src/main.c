@@ -20,6 +20,7 @@
 #include "OFL.h"
 #include "Task.h"
 #include "AHRS.h"
+#include "PVRS.h"
 #include "Flash.h"
 #include "Motor.h"
 #include <stdio.h>
@@ -165,11 +166,14 @@ int main(void)
       "%d,%d,%d,%d,%d,%d,"
       "%d,%d,%d,%d,%d,%d,"
       "%d,%d,%d,%d,%d,%d,"
-      "%d\r\n",
-/********姿态健康********/
+      "%d,%d,%d\r\n",
+/********姿态 + 估计位置********/
       (int)(AHRS.Yaw  *RAD_TO_DEG*10.0f),
       (int)(AHRS.Roll *RAD_TO_DEG*10.0f),
       (int)(AHRS.Pitch*RAD_TO_DEG*10.0f),
+      (int)(PVRS.Pn*100.0f),
+      (int)(PVRS.Pe*100.0f),
+/********健康状态********/
       Health_Status(&GYR_Health),
       Health_Status(&ACC_Health),
       Health_Status(&MAG_Health),
@@ -192,8 +196,8 @@ int main(void)
       (int)(OFL.Vf *1000.0f),
       (int)(OFL.Vr *1000.0f),
       (int)(OFL.Alt*1000.0f),
-      OFL.Valid ? 1 : 0,
-      OFL.Quality);
+      OFL.Flow_Qual,
+      OFL.Laser_Qual);
 
       CDC_Transmit_FS((uint8_t *)buffer,length);
     }

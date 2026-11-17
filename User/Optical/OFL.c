@@ -7,8 +7,8 @@
 /****Optical Flow and Laser****/
 
 ofl_t OFL = {0};
-uint8_t OFL_Buf[18];
 uint8_t OFL_Count = 0;
+uint8_t OFL_Buf[18] = {0};
 
 __attribute__((section(".dma_buffer")))
 uint8_t OFL_RxBuffer[OFL_RX_SIZE];
@@ -19,21 +19,23 @@ void OFL_Start(void)
     __HAL_DMA_DISABLE_IT(huart1.hdmarx,DMA_IT_HT);
 }
 
-static void OFL_Frame(uint8_t *Buf)
+void OFL_Frame(uint8_t *Buf)
 {
     int32_t FlowX = (int32_t)((uint32_t)Buf[2] | ((uint32_t)Buf[3] << 8  )|
                     ((uint32_t)Buf[4] << 16)   | ((uint32_t)Buf[5] << 24));
     int32_t FlowY = (int32_t)((uint32_t)Buf[6] | ((uint32_t)Buf[7] << 8  )|
                     ((uint32_t)Buf[8] << 16)   | ((uint32_t)Buf[9] << 24));
 
-    uint16_t Span = (uint16_t)Buf[10] | ((uint16_t)Buf[11] << 8);
-    uint16_t Dist = (uint16_t)Buf[12] | ((uint16_t)Buf[13] << 8);
+    uint16_t Span = (uint16_t)Buf[10]|((uint16_t)Buf[11] << 8);
+    uint16_t Dist = (uint16_t)Buf[12]|((uint16_t)Buf[13] << 8);
 
-    OFL.Quality = Buf[15];
-    OFL.Alt     = Dist/1000.0f;
-    OFL.Valid   = (Buf[14] == OFL_VALID);
+    OFL.Alt = Dist/1000.0f;
+    OFL.Laser_Qual = Buf[15];
 
-    if(OFL.Valid == true && Span > 0 && OFL.Alt > 0.05f)
+    if(OFL.Alt >= 5.0f) OFL.Flow_Qual = 0;
+    OFL.Flow_Qual = (Buf[14] == OFL_VALID) ? 100 : 0;
+
+    if(OFL.Flow_Qual > 0 && OFL.Alt > 0.1f)
     {
         float RateX = FlowX/1e6f/(Span*1e-6f);
         float RateY = FlowY/1e6f/(Span*1e-6f);
@@ -48,7 +50,7 @@ static void OFL_Frame(uint8_t *Buf)
     }
 
     OFL.New = true;
-    Health_Update(&OFL_Health,(int32_t)(OFL.Vf *1000.0f),(int32_t)(OFL.Vr *1000.0f),(int32_t)(OFL.Alt*1000.0f));
+    Health_Update(&OFL_Health,(int32_t)(OFL.Vf*1000.0f),(int32_t)(OFL.Vr*1000.0f),(int32_t)(OFL.Alt*1000.0f));
 }
 
 void OFL_Parse(uint8_t *Buf,uint16_t Len)

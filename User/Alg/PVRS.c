@@ -162,11 +162,11 @@ void PVRS_Flow(float Vf,float Vr)
 /***************
 *  高度修正
 *
-*  形  参：Alt 离地高度-(向上为正,m)
+*  形  参：Alt 离地高度(向上为正，m)
 ****************/
-void PVRS_Height(float Alt)
+void PVRS_Height(float Alt,float Sigma)
 {
-    PVRS_Correct(2,-Alt,R_ALT);
+    PVRS_Correct(2,-Alt,Sigma);
 }
 
 /***************

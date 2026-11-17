@@ -22,9 +22,9 @@ typedef struct
     float Vf,Vr;                    //水平速度(m/s)
 
     bool New;                       //有新的一帧
-    bool Valid;                     //光流是否可用
-
-    uint8_t Quality;                //置信度 0~100
+    
+    uint8_t Flow_Qual;              //光流置信度 0~100
+    uint8_t Laser_Qual;             //激光置信度 0~100
 
 } ofl_t;
 

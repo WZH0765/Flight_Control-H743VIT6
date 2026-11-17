@@ -1,4 +1,6 @@
+#include "OFL.h"
 #include "gpio.h"
+#include <math.h>
 #include "Task.h"
 #include "AHRS.h"
 #include "PVRS.h"
@@ -58,6 +60,7 @@ void PVRS_Est(void)
 {
     uint32_t Now = micros();
     static uint32_t Last = 0;
+    static float ZeroPress = 0;
 
     if(Last == 0)           //第一次执行记为无效
     {
@@ -71,7 +74,27 @@ void PVRS_Est(void)
 
     PVRS_Update(HW_Body.Acc[0],HW_Body.Acc[1],HW_Body.Acc[2],dt);
 
-    if(State != ARM) PVRS_Still();
+    if(OFL.New == true)
+    {
+        OFL.New = false;
+
+        if(OFL.Laser_Qual >= 30)
+        {
+            PVRS_Height(OFL.Alt,R_ALT);
+        }
+        else
+        {
+            PVRS_Height(44330.0f*(1.0f - powf(HW_Sample.Pressure/ZeroPress,0.190295f)),R_BAR);
+        }
+
+        if(OFL.Flow_Qual >= 50)
+        {
+            PVRS_Flow(OFL.Vf,OFL.Vr);
+        }
+    }
+
+    if(State != ARM) ZeroPress = 0.0f;
+    if(State == DISARM && OFL.Flow_Qual == 0) PVRS_Still();
 }
 
 void FLT_Ctrl(void)

@@ -12,7 +12,8 @@
 #define P_VEL       1.0f        //速度（m/s）
 #define P_BIAS      0.5f        //零偏（m/s²）
 
-#define R_ALT       0.05f       //高度（m）
+#define R_BAR       0.50f       //气压高度（m）
+#define R_ALT       0.05f       //激光高度（m）
 #define R_FLOW      0.05f       //光流测速（m/s）
 #define R_STILL     0.02f       //落地判零（m/s）
 
@@ -37,6 +38,6 @@ extern pvrs_t PVRS;
 
 void PVRS_Init(void);
 void PVRS_Still(void);
-void PVRS_Height(float Alt);
 void PVRS_Flow(float Vf,float Vr);
+void PVRS_Height(float Alt,float Sigma);
 void PVRS_Update(float Ax,float Ay,float Az,float dt);
