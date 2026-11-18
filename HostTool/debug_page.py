@@ -1,6 +1,6 @@
 import pyqtgraph as pg
 from collections import deque
-from config import DATA_LEN, DBG_FIELDS
+from config import DATA_LEN, LINK_ATTITUDE, LINK_IMU, LINK_OFL, LINK_STATUS
 from PyQt5.QtWidgets import QGridLayout, QLabel
 
 DBG_PLOT_H  = 150
@@ -93,45 +93,43 @@ class DebugPageMixin:
         return plot
 
     # ------------------------------------------------------------ 收数据
-    def _handle_dbg_line(self, line: str):
-        parts = line.split(",")
-        if len(parts) != DBG_FIELDS:
-            return
+    def _handle_link_frame(self, fid: int, v: list):
+        """二进制帧进来后分派：姿态喂主页面，传感器喂本页曲线"""
+        if fid == LINK_ATTITUDE:
+            yaw, roll, pitch = v[0] / 10.0, v[1] / 10.0, v[2] / 10.0
 
-        try:
-            v = [int(item) for item in parts[1:]]
-        except ValueError:
-            return
+            self.latest.update(yaw=yaw, roll=roll, pitch=pitch)
+            self.yaw_data.append(yaw)
+            self.roll_data.append(roll)
+            self.pitch_data.append(pitch)
 
-        yaw, roll, pitch = v[0] / 10.0, v[1] / 10.0, v[2] / 10.0
+        elif fid == LINK_IMU:
+            values = {
+                "gx": v[0] / 10.0, "gy": v[1] / 10.0, "gz": v[2] / 10.0,      # 0.1°/s
+                "ax": v[3] / 100.0, "ay": v[4] / 100.0, "az": v[5] / 100.0,   # cm/s²
+                "mx": float(v[6]), "my": float(v[7]), "mz": float(v[8]),      # LSB
+                "press": float(v[9]) + 100000.0,                              # 偏移量还原
+                "temp": v[10] / 10.0,                                         # 0.1℃
+            }
 
-        # 姿态和健康位也喂给主页面，实机就只用这一行遥测
-        self.latest.update(yaw=yaw, roll=roll, pitch=pitch,
-                           gyr=v[5], acc=v[6], mag=v[7], bar=v[8],
-                           ofl=v[9], gps=v[10])
-        self.yaw_data.append(yaw)
-        self.roll_data.append(roll)
-        self.pitch_data.append(pitch)
+            if self._press_ref is None:
+                self._press_ref = values["press"]
+            values["press"] -= self._press_ref        # 画相对值
 
-        values = {
-            "gx": v[11] / 10.0, "gy": v[12] / 10.0, "gz": v[13] / 10.0,    # 0.1°/s
-            "ax": v[14] / 100.0, "ay": v[15] / 100.0, "az": v[16] / 100.0,  # cm/s²
-            "mx": float(v[17]), "my": float(v[18]), "mz": float(v[19]),     # LSB
-            "press": float(v[20]),                                          # Pa
-            "temp": v[21] / 10.0,                                           # 0.1℃
-            "vf": v[22] / 1000.0, "vr": v[23] / 1000.0,                     # mm/s
-            "alt": v[24] / 1000.0,                                          # mm
-            "qual": float(v[26]),
-        }
+            for key, value in values.items():
+                self.dbg_data[key].append(value)
 
-        if self._press_ref is None:
-            self._press_ref = values["press"]
-        values["press"] -= self._press_ref          # 画相对值，十万帕的绝对值看不出噪声
+        elif fid == LINK_OFL:
+            for key, value in (("vf", v[0] / 1000.0), ("vr", v[1] / 1000.0),
+                               ("alt", v[2] / 1000.0)):
+                self.dbg_data[key].append(value)
 
-        for key, value in values.items():
-            self.dbg_data[key].append(value)
+            self.dbg_flow_q = v[3]
+            self.dbg_data["qual"].append(float(v[4]))
 
-        self.dbg_flow_q = v[25]          # 光流置信度 0/100
+        elif fid == LINK_STATUS:
+            self.latest.update(gyr=v[0], acc=v[1], mag=v[2], bar=v[3],
+                               ofl=v[4], gps=v[5])
 
     def _update_debug(self):
         if self.stackedWidget.currentIndex() != self._page_debug_idx:

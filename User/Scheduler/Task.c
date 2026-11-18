@@ -2,6 +2,7 @@
 #include "gpio.h"
 #include <math.h>
 #include "Task.h"
+#include "Link.h"
 #include "AHRS.h"
 #include "PVRS.h"
 #include "Calib.h"
@@ -9,7 +10,6 @@
 #include "SysTime.h"
 #include "hardware.h"
 #include "Receiver.h"
-#include "Protocol.h"
 #include "Scheduler.h"
 #include "Simulator.h"
 
@@ -131,7 +131,7 @@ void Task_Init(void)
     Scheduler_Add("MAG_READ"  ,MAG_Read ,10000  ,TASK_PRIORITY_MED     );
     Scheduler_Add("BAR_READ"  ,BAR_Read ,20000  ,TASK_PRIORITY_MED_LOW );
 #endif
-    Scheduler_Add("SENSOR_CAL",Cal_Run  ,1000   ,TASK_PRIORITY_LOW     );
-    Scheduler_Add("PROTOCOL"  ,Prot_Run ,10000  ,TASK_PRIORITY_LOW     );
+    Scheduler_Add("SEN_CAL"   ,Cal_Run  ,1000   ,TASK_PRIORITY_LOW     );
+    Scheduler_Add("HST_LINK"  ,Link_Run ,10000  ,TASK_PRIORITY_LOW     );
     Scheduler_Add("LED"       ,LED_Blink,1000000,TASK_PRIORITY_LOW     );
 }

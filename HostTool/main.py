@@ -582,6 +582,7 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
 
         self.serial_thread = SerialThread(port, baud=DEFAULT_BAUD)
         self.serial_thread.line_received.connect(self.on_data)
+        self.serial_thread.frame_received.connect(self.on_frame)
         self.serial_thread.connection_result.connect(self.on_connection_result)
         self.serial_thread.start()
 
@@ -649,8 +650,11 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
             self._handle_cal_line(line)
             return
         if upper.startswith("DBG,"):
-            self._handle_dbg_line(line)
             return
+
+    def on_frame(self, fid: int, values: list):
+        """二进制帧（Link.h 定义的几种消息）"""
+        self._handle_link_frame(fid, values)
 
     def _handle_cal_status(self, line: str):
         parts = line.split(",")

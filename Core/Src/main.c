@@ -20,7 +20,6 @@
 #include "OFL.h"
 #include "Task.h"
 #include "AHRS.h"
-#include "PVRS.h"
 #include "Flash.h"
 #include "Motor.h"
 #include <stdio.h>
@@ -47,7 +46,6 @@
 
 #ifndef USE_SIM
 // #define USER_DEBUG_DEVICE
-#define USER_DEBUG_HOST_TOOL
 #endif
 
 /* USER CODE END PD */
@@ -151,55 +149,6 @@ int main(void)
       Health_Status(&MAG_Health),
       Health_Status(&BAR_Health),
       Health_Status(&OFL_Health));
-    }
-#endif
-
-#ifdef USER_DEBUG_HOST_TOOL
-    char buffer[256] = {0};
-    static uint32_t send_tick = 0;
-    if(millis() - send_tick >= 100)
-    {
-      send_tick = millis();
-
-      int length = snprintf(buffer,sizeof(buffer),
-      "DBG,%d,%d,%d,%d,%d,%d,"
-      "%d,%d,%d,%d,%d,%d,"
-      "%d,%d,%d,%d,%d,%d,"
-      "%d,%d,%d,%d,%d,%d,"
-      "%d,%d,%d\r\n",
-/********姿态 + 估计位置********/
-      (int)(AHRS.Yaw  *RAD_TO_DEG*10.0f),
-      (int)(AHRS.Roll *RAD_TO_DEG*10.0f),
-      (int)(AHRS.Pitch*RAD_TO_DEG*10.0f),
-      (int)(PVRS.Pn*100.0f),
-      (int)(PVRS.Pe*100.0f),
-/********健康状态********/
-      Health_Status(&GYR_Health),
-      Health_Status(&ACC_Health),
-      Health_Status(&MAG_Health),
-      Health_Status(&BAR_Health),
-      Health_Status(&OFL_Health),
-      Health_Status(&GPS_Health),
-/********板载外设********/
-      (int)(HW_Sample.Gyr[0]*573.0f),
-      (int)(HW_Sample.Gyr[1]*573.0f),
-      (int)(HW_Sample.Gyr[2]*573.0f),
-      (int)(HW_Sample.Acc[0]*100.0f),
-      (int)(HW_Sample.Acc[1]*100.0f),
-      (int)(HW_Sample.Acc[2]*100.0f),
-      (int)HW_Sample.Mag[0],
-      (int)HW_Sample.Mag[1],
-      (int)HW_Sample.Mag[2],
-      (int)HW_Sample.Pressure,
-      (int)(HW_Sample.Temperature*10.0f),
-/********外部外设********/
-      (int)(OFL.Vf *1000.0f),
-      (int)(OFL.Vr *1000.0f),
-      (int)(OFL.Alt*1000.0f),
-      OFL.Flow_Qual,
-      OFL.Laser_Qual);
-
-      CDC_Transmit_FS((uint8_t *)buffer,length);
     }
 #endif
   }

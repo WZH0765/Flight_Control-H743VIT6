@@ -5,9 +5,12 @@ DATA_LEN     = 150            # 曲线缓存点数
 REFRESH_MS   = 50             # 刷新周期
 DEFAULT_BAUD = 115200
 
-# ---------------- 实机遥测（一行 28 字段，含 "DBG" 前缀）
-# DBG,yaw,roll,pitch,pn,pe,hg,ha,hm,hb,ho,hgp,gx,gy,gz,ax,ay,az,mx,my,mz,press,temp,vf,vr,alt,flowq,laserq
-DBG_FIELDS = 28
+# ---------------- 二进制数据链（和 User/Protocol/Link.h 一一对应）
+LINK_ATTITUDE = 0x01
+LINK_IMU      = 0x02
+LINK_OFL      = 0x03
+LINK_PVRS     = 0x04
+LINK_STATUS   = 0x10
 
 # ---------------- 仿真遥测协议（15 字段）
 # SIM,roll,pitch,yaw,gx,gy,gz,m1,m2,m3,m4,alt,arm,north,east   （姿态/角速度 ×10，位置 cm）

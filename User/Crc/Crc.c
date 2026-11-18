@@ -60,6 +60,23 @@ uint32_t CRC32(const void *Data,uint32_t Len)
     return ~crc;
 }
 
+uint16_t CRC16(const uint8_t *Data,uint16_t Len)
+{
+    uint16_t Crc = 0xFFFF;
+
+    for(uint16_t i = 0;i < Len;i ++)
+    {
+        Crc ^= (uint16_t)Data[i] << 8;
+
+        for(uint8_t bit = 0;bit < 8;bit ++)
+        {
+            Crc = (Crc & 0x8000) ? (uint16_t)((Crc << 1) ^ 0x1021) : (uint16_t)(Crc << 1);
+        }
+    }
+
+    return Crc;
+}
+
 uint8_t CRC_Xor(const uint8_t *Data,uint16_t Len)
 {
     uint8_t Sum = 0;
