@@ -3,7 +3,7 @@ from collections import deque
 from config import DATA_LEN, DBG_FIELDS
 from PyQt5.QtWidgets import QGridLayout, QLabel
 
-DBG_PLOT_H  = 130
+DBG_PLOT_H  = 150
 
 DBG_COLOR = {
     "x": "#ff6b81", "y": "#2ed573", "z": "#1e90ff",
@@ -15,8 +15,7 @@ class DebugPageMixin:
     """MainWindow 的 Debug 页（要求宿主有 self.page_debug）。"""
 
     _dbg_keys = ("gx", "gy", "gz", "ax", "ay", "az",
-                 "mx", "my", "mz", "press", "temp", "vf", "vr", "alt", "qual",
-                 "pn", "pe")
+                 "mx", "my", "mz", "press", "temp", "vf", "vr", "alt", "qual")
 
     # ------------------------------------------------------------ 搭页面
     def _build_debug_page(self):
@@ -38,10 +37,9 @@ class DebugPageMixin:
         self.dbg_bar = self._make_dbg_plot("相对气压 Pa")
         self.dbg_vel = self._make_dbg_plot("光流速度 m/s",     (-2.0,  2.0))
         self.dbg_alt = self._make_dbg_plot("光流高度 m")
-        self.dbg_pos = self._make_dbg_plot("PVRS 估计位置 m")      # 北/东两条
 
         self.dbg_plots = (self.dbg_gyr, self.dbg_acc, self.dbg_mag,
-                          self.dbg_bar, self.dbg_vel, self.dbg_alt, self.dbg_pos)
+                          self.dbg_bar, self.dbg_vel, self.dbg_alt)
 
         self.dbg_curves = {
             "gx": self.dbg_gyr.plot(pen=pg.mkPen(DBG_COLOR["x"], width=2), name="Gx"),
@@ -62,9 +60,6 @@ class DebugPageMixin:
             "vr": self.dbg_vel.plot(pen=pg.mkPen(DBG_COLOR["vr"], width=2), name="右向"),
 
             "alt": self.dbg_alt.plot(pen=pg.mkPen(DBG_COLOR["alt"], width=2), name="高度"),
-
-            "pn": self.dbg_pos.plot(pen=pg.mkPen(DBG_COLOR["y"], width=2), name="北"),
-            "pe": self.dbg_pos.plot(pen=pg.mkPen(DBG_COLOR["z"], width=2), name="东"),
         }
 
         grid = QGridLayout()
@@ -75,7 +70,6 @@ class DebugPageMixin:
         grid.addWidget(self.dbg_bar, 1, 1)
         grid.addWidget(self.dbg_vel, 2, 0)
         grid.addWidget(self.dbg_alt, 2, 1)
-        grid.addWidget(self.dbg_pos, 3, 0, 1, 2)          # 位置横跨两列
 
         box.addLayout(grid, 1)
 
@@ -128,7 +122,6 @@ class DebugPageMixin:
             "vf": v[22] / 1000.0, "vr": v[23] / 1000.0,                     # mm/s
             "alt": v[24] / 1000.0,                                          # mm
             "qual": float(v[26]),
-            "pn": v[3] / 100.0, "pe": v[4] / 100.0,                         # cm
         }
 
         if self._press_ref is None:
