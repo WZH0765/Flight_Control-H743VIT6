@@ -23,7 +23,7 @@ class SerialThread(QThread):
     """读串口，把字节流拆成「二进制帧」和「文本行」两路"""
 
     line_received     = pyqtSignal(str)         # SIM,... / CAL,... / GPS,...
-    frame_received    = pyqtSignal(int, list)   # (ID, int16 列表)
+    frame_received    = pyqtSignal(int, object) # (ID, int16 列表)
     connection_result = pyqtSignal(bool, str)   # (成功与否, 错误信息)
 
     def __init__(self, port, baud=115200):
@@ -33,6 +33,8 @@ class SerialThread(QThread):
         self.ser = None
         self.is_running = False
         self.buf = bytearray()
+
+        self.last_error = ""
 
     def run(self):
         try:
@@ -47,40 +49,24 @@ class SerialThread(QThread):
                 else:
                     self.msleep(5)
         except Exception as e:
+            self.last_error = str(e)
             self.connection_result.emit(False, str(e))
 
     def _feed(self, data):
         self.buf += data
 
         while self.buf:
-            if len(self.buf) >= 2 and self.buf[0] == 0xAA and self.buf[1] == 0x55:
-                if len(self.buf) < 4:
-                    return
+            pos = self.buf.find(b"\xAA\x55")
 
-                length = self.buf[3]
-                total = length + 6
-                if len(self.buf) < total:
-                    return
+            # ---------- 帧头不在开头：前面的字节当文本/垃圾处理 ----------
+            if pos != 0:
+                end = self.buf.find(b"\n", 0, pos if pos > 0 else len(self.buf))
 
-                body = bytes(self.buf[2:4 + length])
-                crc = self.buf[4 + length] | (self.buf[5 + length] << 8)
-
-                if length % 2 == 0 and crc16(body) == crc:
-                    count = length // 2
-                    values = list(struct.unpack("<%dh" % count, bytes(self.buf[4:4 + length])))
-                    self.frame_received.emit(body[0], values)
-                    del self.buf[:total]
-                else:
-                    del self.buf[0]         # 坏帧，丢一字节重新找同步
-
-                continue
-
-            # 文本行
-            if self.buf[0] in (0x0A, 0x0D) or 0x20 <= self.buf[0] <= 0x7E:
-                end = self.buf.find(b"\n")
                 if end < 0:
-                    if len(self.buf) > 4096:
-                        del self.buf[:]
+                    if pos > 0:
+                        del self.buf[:pos]          # 帧头前是垃圾，丢掉，保住后面的帧
+                    elif len(self.buf) > 256:
+                        del self.buf[:]             # 一直没有帧头也没有换行，清空重来
                     return
 
                 line = bytes(self.buf[:end]).decode("utf-8", errors="ignore").strip()
@@ -91,7 +77,25 @@ class SerialThread(QThread):
 
                 continue
 
-            del self.buf[0]                 # 二进制垃圾
+            # ---------- 帧头在开头：解析一帧 ----------
+            if len(self.buf) < 4:
+                return
+
+            length = self.buf[3]
+            total = length + 6
+            if len(self.buf) < total:
+                return                              # 半包，等下一块数据
+
+            body = bytes(self.buf[2:4 + length])
+            crc = self.buf[4 + length] | (self.buf[5 + length] << 8)
+
+            if length % 2 == 0 and crc16(body) == crc:
+                count = length // 2
+                values = list(struct.unpack("<%dh" % count, bytes(self.buf[4:4 + length])))
+                self.frame_received.emit(body[0], values)
+                del self.buf[:total]
+            else:
+                del self.buf[0]                     # 坏帧，丢一字节重新找同步
 
     def stop(self):
         self.is_running = False

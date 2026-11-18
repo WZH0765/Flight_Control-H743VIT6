@@ -43,12 +43,13 @@ void Link_Send(uint8_t ID,const int16_t *Data,uint8_t Count)
 void Link_Run(void)
 {
     int16_t Buf[11];
+    uint32_t Now = millis();
     static uint32_t Tick[5];
 
 /*姿态 50Hz*/
-    if(millis() - Tick[0] >= 20)
+    if(Now - Tick[0] >= 20)
     {
-        Tick[0] = millis();
+        Tick[0] = Now;
 
         Buf[0] = (int16_t)(AHRS.Yaw  *RAD_TO_DEG*10.0f);
         Buf[1] = (int16_t)(AHRS.Roll *RAD_TO_DEG*10.0f);
@@ -58,12 +59,13 @@ void Link_Run(void)
         Buf[5] = (int16_t)(HW_Body.Gyr[2]*RAD_TO_DEG*10.0f);
 
         Link_Send(LINK_ATT,Buf,6);
+        return;
     }
 
 /*九轴 + 气压 10Hz*/
-    if(millis() - Tick[1] >= 100)
+    if(Now - Tick[1] >= 100)
     {
-        Tick[1] = millis();
+        Tick[1] = Now;
 
         Buf[0]  = (int16_t)(HW_Sample.Gyr[0]*RAD_TO_DEG*10.0f);
         Buf[1]  = (int16_t)(HW_Sample.Gyr[1]*RAD_TO_DEG*10.0f);
@@ -78,12 +80,13 @@ void Link_Run(void)
         Buf[10] = (int16_t)(HW_Sample.Temperature*10.0f);
 
         Link_Send(LINK_IMU,Buf,11);
+        return;
     }
 
 /*光流 + 激光 10Hz*/
-    if(millis() - Tick[2] >= 100)
+    if(Now - Tick[2] >= 100)
     {
-        Tick[2] = millis();
+        Tick[2] = Now;
 
         Buf[0] = (int16_t)(OFL.Vf*1000.0f);
         Buf[1] = (int16_t)(OFL.Vr*1000.0f);
@@ -92,12 +95,13 @@ void Link_Run(void)
         Buf[4] = OFL.Laser_Qual;
 
         Link_Send(LINK_OFL,Buf,5);
+        return;
     }
 
 /*位置速度 10Hz*/
-    if(millis() - Tick[3] >= 100)
+    if(Now - Tick[3] >= 100)
     {
-        Tick[3] = millis();
+        Tick[3] = Now;
 
         Buf[0] = (int16_t)(PVRS.Pn*100.0f);
         Buf[1] = (int16_t)(PVRS.Pe*100.0f);
@@ -107,12 +111,13 @@ void Link_Run(void)
         Buf[5] = (int16_t)(PVRS.Vd*100.0f);
 
         Link_Send(LINK_PVRS,Buf,6);
+        return;
     }
 
 /*健康 状态 5Hz*/
-    if(millis() - Tick[4] >= 200)
+    if(Now - Tick[4] >= 200)
     {
-        Tick[4] = millis();
+        Tick[4] = Now;
 
         Buf[0] = Health_Status(&GYR_Health);
         Buf[1] = Health_Status(&ACC_Health);
@@ -121,7 +126,7 @@ void Link_Run(void)
         Buf[4] = Health_Status(&OFL_Health);
         Buf[5] = Health_Status(&GPS_Health);
         Buf[6] = (int16_t)State;
-        Buf[7] = 0;                                 //保留，以后放电压/电流
+        Buf[7] = 0;                                 //保留
 
         Link_Send(LINK_STATUS,Buf,8);
     }

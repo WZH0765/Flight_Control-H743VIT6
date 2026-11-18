@@ -620,11 +620,7 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
             self.arm_button.setEnabled(True)
             self._style_arm_button()
 
-            self._show_hint("校准参数：查询中…")
-            try:
-                self.serial_thread.ser.write(b"cal,status\n")
-            except Exception:
-                pass
+            self._show_hint("")
         else:
             self.serial_thread = None
             self.link_button.setText("CONNECT")
@@ -654,7 +650,10 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
 
     def on_frame(self, fid: int, values: list):
         """二进制帧（Link.h 定义的几种消息）"""
-        self._handle_link_frame(fid, values)
+        try:
+            self._handle_link_frame(fid, values)
+        except Exception as error:
+            print("帧处理出错", hex(fid), error, flush=True)
 
     def _handle_cal_status(self, line: str):
         parts = line.split(",")
