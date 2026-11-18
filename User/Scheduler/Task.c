@@ -13,11 +13,6 @@
 #include "Scheduler.h"
 #include "Simulator.h"
 
-void LED_Blink(void)
-{
-    HAL_GPIO_TogglePin(LED1_GPIO_Port,LED1_Pin);
-}
-
 void AHRS_Est(void)
 {
     uint32_t Now = micros();
@@ -133,5 +128,4 @@ void Task_Init(void)
 #endif
     Scheduler_Add("SEN_CAL"   ,Cal_Run  ,1000   ,TASK_PRIORITY_LOW     );
     Scheduler_Add("HST_LINK"  ,Link_Run ,10000  ,TASK_PRIORITY_LOW     );
-    Scheduler_Add("LED"       ,LED_Blink,1000000,TASK_PRIORITY_LOW     );
 }

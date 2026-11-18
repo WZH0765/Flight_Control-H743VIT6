@@ -18,6 +18,7 @@
 
 #include "GPS.h"
 #include "OFL.h"
+#include "LED.h"
 #include "Task.h"
 #include "AHRS.h"
 #include "Flash.h"
@@ -110,15 +111,19 @@ int main(void)
   Hardware_Init();
   Flight_Init();
   // Flash_Load();
-/******SIMULATOR********/
+
 #ifdef USE_SIM
   Simulator_Init();
 #endif
-/**********************/
+
   Task_Init();
+
+/**系统初始化完成**/
+  LED_Flash(3,600);
 
   while(1)
   {
+    LED_Run();
     Scheduler_Run();
 
 #ifdef USER_DEBUG_DEVICE
