@@ -76,7 +76,7 @@ void Link_Run(void)
         Buf[6]  = (int16_t)HW_Sample.Mag[0];
         Buf[7]  = (int16_t)HW_Sample.Mag[1];
         Buf[8]  = (int16_t)HW_Sample.Mag[2];
-        Buf[9]  = (int16_t)(HW_Sample.Pressure - 100000.0f);    //气压偏移量
+        Buf[9]  = (int16_t)(HW_Sample.Pressure - 90000.0f);    //气压 0.001kPa（1Pa）
         Buf[10] = (int16_t)(HW_Sample.Temperature*10.0f);
 
         Link_Send(LINK_IMU,Buf,11);

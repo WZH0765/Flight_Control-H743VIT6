@@ -18,7 +18,7 @@
 #define LINK_MAX        48          //最大负载字节数
 
 #define LINK_ATT        0x01        //姿态 50Hz   yaw roll pitch(0.1°) gx gy gz(0.1°/s)
-#define LINK_IMU        0x02        //九轴 10Hz   gx gy gz(0.1°/s) ax ay az(cm/s²) mx my mz(LSB) 气压偏移(Pa) 温度(0.1℃)
+#define LINK_IMU        0x02        //九轴 10Hz   gx gy gz(0.1°/s) ax ay az(cm/s²) mx my mz(LSB) 气压(0.001kPa) 温度(0.1℃)
 #define LINK_OFL        0x03        //光流 10Hz   vf vr(mm/s) alt(mm) 光流质量 激光质量
 #define LINK_PVRS       0x04        //位置 10Hz   pn pe(cm) vn ve(cm/s) pd(cm) vd(cm/s)
 #define LINK_STATUS     0x10        //状态  5Hz   六路健康位 + 解锁状态 + 保留

@@ -24,17 +24,12 @@ class DebugPageMixin:
         box = self.page_debug.layout()
         box.setSpacing(8)
 
-        self.dbg_info = QLabel("等待传感器数据…")
-        self.dbg_info.setStyleSheet("font-size: 9pt; font-family: Consolas, monospace;")
-        box.addWidget(self.dbg_info)
-
         self.dbg_data = {key: deque([0.0] * DATA_LEN, maxlen=DATA_LEN) for key in self._dbg_keys}
-        self._press_ref = None          # 气压画相对值，否则 10 万 Pa 的绝对值看不出噪声
 
         self.dbg_gyr = self._make_dbg_plot("陀螺 °/s",         (-100.0, 100.0))
         self.dbg_acc = self._make_dbg_plot("加速度 m/s²",      (-20.0,  20.0))
         self.dbg_mag = self._make_dbg_plot("磁力计 LSB",       (-1000.0, 1000.0))
-        self.dbg_bar = self._make_dbg_plot("相对气压 Pa")
+        self.dbg_bar = self._make_dbg_plot("气压 kPa")
         self.dbg_vel = self._make_dbg_plot("光流速度 m/s",     (-2.0,  2.0))
         self.dbg_alt = self._make_dbg_plot("光流高度 m")
 
@@ -108,13 +103,9 @@ class DebugPageMixin:
                 "gx": v[0] / 10.0, "gy": v[1] / 10.0, "gz": v[2] / 10.0,      # 0.1°/s
                 "ax": v[3] / 100.0, "ay": v[4] / 100.0, "az": v[5] / 100.0,   # cm/s²
                 "mx": float(v[6]), "my": float(v[7]), "mz": float(v[8]),      # LSB
-                "press": float(v[9]) + 100000.0,                              # 偏移量还原
+                "press": 90.0 + v[9] * 0.001,                                  # 气压 kPa（0.001kPa 偏移 90kPa）
                 "temp": v[10] / 10.0,                                         # 0.1℃
             }
-
-            if self._press_ref is None:
-                self._press_ref = values["press"]
-            values["press"] -= self._press_ref        # 画相对值
 
             for key, value in values.items():
                 self.dbg_data[key].append(value)
@@ -137,8 +128,3 @@ class DebugPageMixin:
 
         for key, curve in self.dbg_curves.items():
             curve.setData(list(self.dbg_data[key]))
-
-        self.dbg_info.setText("温度 %.1f ℃   激光质量 %d   光流 %d"
-                              % (self.dbg_data["temp"][-1],
-                                 self.dbg_data["qual"][-1],
-                                 getattr(self, "dbg_flow_q", 0)))
