@@ -1,6 +1,6 @@
 import pyqtgraph as pg
 from collections import deque
-from config import DATA_LEN, LINK_ATTITUDE, LINK_IMU, LINK_OFL, LINK_STATUS
+from config import DATA_LEN, LINK_ATTITUDE, LINK_CAL, LINK_IMU, LINK_OFL, LINK_STATUS
 from PyQt5.QtWidgets import QGridLayout, QLabel
 
 DBG_PLOT_H  = 150
@@ -118,9 +118,15 @@ class DebugPageMixin:
             self.dbg_flow_q = v[3]
             self.dbg_data["qual"].append(float(v[4]))
 
+        elif fid == LINK_CAL:
+            self._handle_cal_frame(v)
+
         elif fid == LINK_STATUS:
             self.latest.update(gyr=v[0], acc=v[1], mag=v[2], bar=v[3],
                                ofl=v[4], gps=v[5])
+
+            if len(v) > 6:
+                self._sync_arm_button(v[6] == 0)        #固件里 ARM = 0
 
     def _update_debug(self):
         if self.stackedWidget.currentIndex() != self._page_debug_idx:

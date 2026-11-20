@@ -14,8 +14,8 @@ from PyQt5.QtWidgets import (
 
 from attitude_indicator import AttitudeIndicator
 from config import (
-    DATA_LEN, PAGE_SIM, RC_KEY_STEP, SIM_COLOR, SIM_FIELDS, SIM_IDX_E,
-    SIM_IDX_M1, SIM_IDX_N, SIM_MISS_MAX, SIM_PLOT_H,
+    DATA_LEN, LINK_CMD_RC, LINK_CMD_STATE, PAGE_SIM, RC_KEY_STEP, SIM_COLOR,
+    SIM_FIELDS, SIM_IDX_E, SIM_IDX_M1, SIM_IDX_N, SIM_MISS_MAX, SIM_PLOT_H,
 )
 from virtual_map import VirtualMap
 from widgets import StickPad
@@ -235,11 +235,7 @@ class SimPageMixin:
         if self.serial_thread is None or self.serial_thread.ser is None:
             return
 
-        try:
-            self.serial_thread.ser.write(
-                f"rc,{Thro:.0f},{Yaw:.0f},{Roll:.0f},{Pitch:.0f}\n".encode())
-        except Exception:
-            pass
+        self.send_frame(LINK_CMD_RC, [int(Thro), int(Yaw), int(Roll), int(Pitch)])
 
     # ------------------------------------------------------------ 解锁
     def _on_arm_clicked(self):
@@ -253,9 +249,7 @@ class SimPageMixin:
         self.arm_button.setText("已解锁" if Arm else "未解锁")
         self._style_arm_button()
 
-        try:
-            self.serial_thread.ser.write(f"arm,{Arm}\n".encode())
-        except Exception:
+        if not self.send_frame(LINK_CMD_STATE, [Arm]):
             self.arm_button.setChecked(not Arm)
 
     def _sync_arm_button(self, Arm: bool):

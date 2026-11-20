@@ -15,6 +15,9 @@
 *   CRC16   2 字节,对 ID+LEN+负载 计算，多项式 0x1021，初值 0xFFFF
 ******************/
 
+#define GET16(Buf)      ((int16_t)((Buf)[0] | ((uint16_t)(Buf)[1] << 8)))
+
+#define RX_SIZE         128
 #define LINK_MAX        48          //最大负载字节数
 
 #define LINK_ATT        0x01        //姿态 50Hz   yaw roll pitch(0.1°) gx gy gz(0.1°/s)
@@ -22,6 +25,16 @@
 #define LINK_OFL        0x03        //光流 10Hz   vf vr(mm/s) alt(mm) 光流质量 激光质量
 #define LINK_PVRS       0x04        //位置 10Hz   pn pe(cm) vn ve(cm/s) pd(cm) vd(cm/s)
 #define LINK_STATUS     0x10        //状态  5Hz   六路健康位 + 解锁状态 + 保留
+#define LINK_CAL        0x11        //校准  5Hz   传感器, 校准状态, 面, IMU有效, MAG有效
+
+typedef enum
+{
+    LINK_CMD_CAL   = 0x21,      //上位机→飞控 校准
+    LINK_CMD_SIMU  = 0x22,      //上位机→飞控 模拟
+    LINK_CMD_STATE = 0x20       //上位机→飞控 解锁
+
+} linkState_e;
 
 void Link_Run(void);
-void Link_Send(uint8_t ID,const int16_t *Data,uint8_t Count);
+void Link_Rx(uint8_t *Buf,uint32_t Len);
+void Link_Tx(uint8_t ID,const int16_t *Data,uint8_t Count);

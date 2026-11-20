@@ -1,5 +1,6 @@
 import sys
 import os
+import struct
 from collections import deque
 
 import serial.tools.list_ports
@@ -14,13 +15,14 @@ from PyQt5 import uic
 
 from attitude_indicator import AttitudeIndicator
 from config import (
-    DATA_LEN, DEFAULT_BAUD, PAGE_ABOUT, PAGE_CALIBRATION, PAGE_DASHBOARD, PAGE_HELP,
-    PAGE_SIM, RC_SEND_MS, REFRESH_MS, SIM_COLOR, SIM_MISS_MAX,
+    DATA_LEN, DEFAULT_BAUD, LINK_CMD_CAL, LINK_CMD_STATE, PAGE_ABOUT,
+    PAGE_CALIBRATION, PAGE_DASHBOARD, PAGE_HELP, PAGE_SIM, RC_SEND_MS,
+    REFRESH_MS, SIM_COLOR, SIM_MISS_MAX,
 )
 from help_text import HELP_DOCS, HELP_TOPICS
 from gps_page import GpsMixin
 from debug_page import DebugPageMixin
-from serial_thread import SerialThread
+from serial_thread import SerialThread, crc16
 from sim_page import SimPageMixin
 from theme import THEMES, button_style, combo_style, global_style
 from widgets import FACE_TEXT, FaceTile, FACE_COLOR, SensorIcon
@@ -321,21 +323,22 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
         self.start_accgyr.setText(text)
         self.start_accgyr.setEnabled(enabled)
 
-    def _send_cmd(self, cmd: str):
+    def send_frame(self, fid: int, values):
+        """按固件 Link.c 的帧格式发一条命令：AA 55 | ID | LEN | 负载 | CRC16"""
         if self.serial_thread is None or self.serial_thread.ser is None:
             self.show_warning("提示", "请先连接串口")
             return False
 
-        try:
-            self.serial_thread.ser.write(cmd.encode())
-            self._append_cal_log(f"[TX] {cmd.strip()}")
-            return True
-        except Exception as e:
-            self.show_warning("发送失败", str(e))
-            return False
+        body = bytes([fid, len(values) * 2])
+        payload = struct.pack("<%dh" % len(values), *values)
+        crc = crc16(body + payload)
+
+        self.serial_thread.send(b"\xAA\x55" + body + payload
+                                + bytes([crc & 0xFF, crc >> 8]))
+        return True
 
     def _send_cal_cmd(self, sensor: str):
-        if not self._send_cmd(f"cal,{sensor},start\n"):
+        if not self.send_frame(LINK_CMD_CAL, [0 if sensor == "imu" else 1, 0]):
             return
 
         progress_bar = self._cal_progress(sensor)
@@ -347,13 +350,13 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
             self._reset_faces()
 
     def _send_cal_next(self):
-        if not self._send_cmd("cal,imu,next\n"):
+        if not self.send_frame(LINK_CMD_CAL, [0, 0]):
             return
 
         self._imu_button("Start", False)
 
     def _abort_cal(self, sensor: str):
-        self._send_cmd(f"cal,{sensor},abort\n")
+        self.send_frame(LINK_CMD_CAL, [0 if sensor == "imu" else 1, 1])
 
         progress_bar = self._cal_progress(sensor)
         self._set_busy(progress_bar, False)
@@ -365,100 +368,91 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
 
         self._append_cal_log(f"[INFO] {sensor.upper()} 校准已停止")
 
-    def _handle_cal_line(self, line: str):
-        self._append_cal_log(f"[RX] {line}")
-
-        parts = line.split(",")
-        if len(parts) < 3:
-            return
-
-        sensor = parts[1].strip().lower()
-        state  = parts[2].strip().upper()
-        detail = parts[3].strip().upper() if len(parts) > 3 else ""
+    def _handle_cal_frame(self, v):
+        """LINK_CAL：传感器, 校准状态, 面, IMU有效, MAG有效"""
+        sensor = "imu" if v[0] == 0 else "mag"
+        state  = v[1]
+        face   = v[2]
 
         name = sensor.upper()
-        progress_bar = self._cal_progress(sensor)
+        bar  = self._cal_progress(sensor)
 
-        if state == "CHECK":
-            self._set_busy(progress_bar, False)
-            progress_bar.setValue(0)
+        if len(v) > 4:
+            if v[3] and v[4]:
+                self._show_hint("校准参数：已加载")
+            elif v[3] or v[4]:
+                self._show_hint("校准参数：部分加载")
+            else:
+                self._show_hint("校准参数：未校准")
+
+        # 固件 5Hz 重复发，只在状态或面号变化时写日志
+        changed = (v[0], state, face) != getattr(self, "_cal_key", None)
+        self._cal_key = (v[0], state, face)
+
+        if not changed:
+            return
+
+        if state == 3:                              # REQUEST 刚启动
+            self._append_cal_log(f"[INFO] {name} 校准开始")
+
+        elif state == 1:                            # CHECK 等静止
+            self._set_busy(bar, False)
+            bar.setValue(0)
             self._append_cal_log(f"[INFO] 请将 FACE1：{FACE_TEXT[1]} 放好，保持静止...")
             if sensor == "imu":
                 self._imu_button("Start", False)
                 self._reset_faces()
                 self.face_tiles[1].set_state("active")
 
-        elif state == "COLLECT":
+        elif state == 4:                            # COLLECT 采集中
             if sensor == "imu":
                 self._imu_button("Start", False)
-                self._set_busy(progress_bar, False)
-                if detail.startswith("FACE"):
-                    face = int(detail[4:]) if detail[4:].isdigit() else 0
-                    progress_bar.setValue(min(90, max(0, (face - 1) * 15)))
-                    self._append_cal_log(f"[INFO] 正在采集 FACE{face}...")
-                    self._set_face_stage(face)
-                elif detail == "GYRO":
-                    progress_bar.setValue(90)
-                    self._append_cal_log("[INFO] 正在采集陀螺零偏...")
+                self._set_busy(bar, False)
+
+                if face < 6:
+                    bar.setValue(face*15)
+                    self._set_face_stage(face + 1)
+                    self._append_cal_log(f"[INFO] 正在采集 FACE{face + 1}...")
+                else:
+                    bar.setValue(90)
                     self._finish_faces()
+                    self._append_cal_log("[INFO] 正在采集陀螺零偏...")
             else:
-                self._set_busy(progress_bar, True)
+                self._set_busy(bar, True)
                 self._append_cal_log("[INFO] 请缓慢翻转板子，覆盖各个方向（约 10 秒）")
 
-        elif state == "WAIT":
-            self._set_busy(progress_bar, False)
-            if detail == "GYRO":
-                progress_bar.setValue(90)
-                self._append_cal_log("[INFO] 请保持静止，然后点击 NEXT 采集陀螺")
+        elif state == 2:                            # WAIT 等 NEXT
+            self._set_busy(bar, False)
+            bar.setValue(min(90, face*15))
+
+            if face < 6:
+                self._set_face_stage(face + 1)
+                self._append_cal_log(f"[INFO] 请将 {FACE_TEXT.get(face + 1, face + 1)}，然后点击 NEXT")
+            else:
                 self._finish_faces()
-            elif detail.startswith("FACE"):
-                face = int(detail[4:]) if detail[4:].isdigit() else 0
-                progress_bar.setValue(min(90, max(0, (face - 1) * 15)))
-                self._append_cal_log(f"[INFO] 请将 {FACE_TEXT.get(face, detail)}，然后点击 NEXT")
-                self._set_face_stage(face)
+                self._append_cal_log("[INFO] 请保持静止，然后点击 NEXT 采集陀螺")
+
             if sensor == "imu":
                 self._imu_button("NEXT", True)
 
-        elif state == "SCALE":
-            self._append_cal_log(f"[INFO] Acc_Scal = {detail}")
+        else:                                       # IDLE 结束
+            self._set_busy(bar, False)
 
-        elif state == "SAVE":
-            self._set_busy(progress_bar, False)
-            progress_bar.setValue(0)
-            self._append_cal_log(f"[WARN] {name} 校准完成，但 Flash 保存失败，已标记未校准")
+            valid = v[3] if sensor == "imu" else (v[4] if len(v) > 4 else 0)
+            bar.setValue(100 if valid else 0)
+
+            if valid:
+                self._append_cal_log(f"[INFO] {name} 校准完成")
+            else:
+                self._append_cal_log(f"[ERROR] {name} 校准未完成")
+
             if sensor == "imu":
                 self._imu_button("Start", True)
-                self._reset_faces()
 
-        elif state == "DONE":
-            self._set_busy(progress_bar, False)
-            progress_bar.setValue(100)
-            self._append_cal_log(f"[INFO] {name} 校准完成")
-            if sensor == "imu":
-                self._imu_button("Start", True)
-                self._finish_faces()
-
-        elif state == "ERROR":
-            self._set_busy(progress_bar, False)
-            progress_bar.setValue(0)
-            self._append_cal_log(f"[ERROR] {name} 校准失败")
-            if sensor == "imu":
-                self._imu_button("Start", True)
-                self._reset_faces()
-
-        elif state == "IDLE":
-            self._set_busy(progress_bar, False)
-            progress_bar.setValue(0)
-            if detail == "ABORTED":
-                self._append_cal_log(f"[INFO] {name} 校准已取消")
-            if sensor == "imu":
-                self._imu_button("Start", True)
-                self._reset_faces()
-
-        elif state == "BUSY":
-            self._append_cal_log(f"[WARN] {name} 正在校准中")
-            if sensor == "imu":
-                self._imu_button("Start", True)
+                if valid:
+                    self._finish_faces()
+                else:
+                    self._reset_faces()
 
     def _append_cal_log(self, text: str):
         self.calib_text.appendPlainText(text)
@@ -639,14 +633,6 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
         if upper.startswith("GPS,"):
             self._handle_gps_line(line)
             return
-        if upper.startswith("CAL,STATUS,"):
-            self._handle_cal_status(line)
-            return
-        if upper.startswith("CAL,"):
-            self._handle_cal_line(line)
-            return
-        if upper.startswith("DBG,"):
-            return
 
     def on_frame(self, fid: int, values: list):
         """二进制帧（Link.h 定义的几种消息）"""
@@ -654,26 +640,6 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
             self._handle_link_frame(fid, values)
         except Exception as error:
             print("帧处理出错", hex(fid), error, flush=True)
-
-    def _handle_cal_status(self, line: str):
-        parts = line.split(",")
-        imu = mag = False
-
-        for item in parts[2:]:
-            item = item.strip().upper()
-            if item.startswith("IMU="):
-                imu = item[4:] == "1"
-            elif item.startswith("MAG="):
-                mag = item[4:] == "1"
-
-        if imu and mag:
-            text = "校准参数：已加载"
-        elif imu or mag:
-            text = "校准参数：部分加载"
-        else:
-            text = "校准参数：未校准"
-
-        self._show_hint(text)
 
     # ============================================================ 刷新 UI
     def refresh_ui(self):

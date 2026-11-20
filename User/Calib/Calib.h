@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdint.h>
 #include <stdbool.h>
 
 #define STILL_MS      500
@@ -35,6 +36,10 @@ extern float Mag_Bias[3];
 extern float Acc_Scal[3];
 extern bool  IMU_CalValid;
 extern bool  MAG_CalValid;
+
+extern uint8_t Face;
+extern sensor_t Mode;
+extern calstate_e CAL_State;
 
 void Cal_Run(void);
 void Cal_Abort(void);

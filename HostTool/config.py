@@ -11,6 +11,12 @@ LINK_IMU      = 0x02
 LINK_OFL      = 0x03
 LINK_PVRS     = 0x04
 LINK_STATUS   = 0x10
+LINK_CAL      = 0x11
+
+# 上位机 → 飞控
+LINK_CMD_STATE = 0x20
+LINK_CMD_CAL   = 0x21
+LINK_CMD_RC    = 0x22
 
 # ---------------- 仿真遥测协议（15 字段）
 # SIM,roll,pitch,yaw,gx,gy,gz,m1,m2,m3,m4,alt,arm,north,east   （姿态/角速度 ×10，位置 cm）

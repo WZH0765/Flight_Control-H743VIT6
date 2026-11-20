@@ -5,7 +5,8 @@
 #include "SysTime.h"
 #include "Hardware.h"
 
-sensor_t Mode  = IMU;
+uint8_t  Face = 0;
+sensor_t Mode = IMU;
 calstate_e CAL_State = IDLE;
 
 /*****校准结果*****/
@@ -29,7 +30,6 @@ void Cal_Start(sensor_t Sensor)
 
     if(CAL_State != IDLE)
     {
-        printf("CAL,%s,BUSY\r\n",(Sensor == IMU) ? "IMU" : "MAG");
         return;
     }
 
@@ -44,7 +44,6 @@ void Cal_Abort(void)
 
     Next  = false;
     CAL_State = IDLE;
-    printf("CAL,%s,IDLE,ABORTED\r\n",(Mode == IMU) ? "IMU" : "MAG");
 }
 
 /***************
@@ -57,7 +56,6 @@ static void Cal_IMU(void)
     float    G2,A2;
     uint32_t Now = millis();
 
-    static uint8_t  Face = 0;
     static uint16_t Samples = 0;
     static uint32_t TimeStamp = 0;
 
@@ -70,16 +68,7 @@ static void Cal_IMU(void)
         Samples   = 0;
         TimeStamp = Now;
         Next      = false;
-        CAL_State     = COLLECT;
-
-        if(Face < 6)
-        {
-            printf("CAL,IMU,COLLECT,FACE%d\r\n",Face + 1);
-        }
-        else
-        {
-            printf("CAL,IMU,COLLECT,GYRO\r\n");
-        }
+        CAL_State = COLLECT;
     }
 
     switch(CAL_State)
@@ -88,12 +77,11 @@ static void Cal_IMU(void)
             Face      = 0;
             Samples   = 0;
             TimeStamp = Now;
-            CAL_State     = CHECK;
+            CAL_State = CHECK;
 
             memset(Acc_Sum,0,sizeof(Acc_Sum));
             memset(Gyr_Sum,0,sizeof(Gyr_Sum));
 
-            printf("CAL,IMU,CHECK\r\n");
             break;
 
         case CHECK:
@@ -116,9 +104,7 @@ static void Cal_IMU(void)
                 Face      = 0;
                 Samples   = 0;
                 TimeStamp = Now;
-                CAL_State     = COLLECT;
-
-                printf("CAL,IMU,COLLECT,FACE1\r\n");
+                CAL_State = COLLECT;
             }
             break;
 
@@ -139,16 +125,7 @@ static void Cal_IMU(void)
                     Face ++;
                     Samples   = 0;
                     TimeStamp = Now;
-                    CAL_State     = WAIT;
-
-                    if(Face < 6)
-                    {
-                        printf("CAL,IMU,WAIT,FACE%d\r\n",Face + 1);
-                    }
-                    else
-                    {
-                        printf("CAL,IMU,WAIT,GYRO\r\n");
-                    }
+                    CAL_State = WAIT;
                 }
             }
             else
@@ -180,23 +157,15 @@ static void Cal_IMU(void)
 
                     if(Valid == false)
                     {
-                        IMU_CalValid = false;
-
-                        printf("CAL,IMU,SCALE,%.2f,%.2f,%.2f\r\n",Acc_Scal[0],Acc_Scal[1],Acc_Scal[2]);
-                        printf("CAL,IMU,ERROR\r\n");
-
                         CAL_State = IDLE;
+                        IMU_CalValid = false;
                         break;
                     }
 
                     IMU_CalValid = true;
                     Saved = Flash_Save();
-                    printf("CAL,IMU,DONE\r\n");
 
-                    if(Saved == false)
-                    {
-                        printf("CAL,IMU,SAVE,ERROR\r\n");
-                    }
+                    if(Saved == false) IMU_CalValid = false;
 
                     CAL_State = IDLE;
                 }
@@ -230,9 +199,8 @@ static void Cal_MAG(void)
         case REQUEST:
             Count   = 0;
             Divider = 0;
-            CAL_State   = COLLECT;
+            CAL_State = COLLECT;
 
-            printf("CAL,MAG,COLLECT\r\n");
             break;
 
         case COLLECT:
@@ -271,7 +239,6 @@ static void Cal_MAG(void)
                Max[2] - Min[2] < RANGE_MAG_MIN)
             {
                 MAG_CalValid = false;
-                printf("CAL,MAG,ERROR\r\n");
             }
             else
             {
@@ -283,12 +250,8 @@ static void Cal_MAG(void)
 
                 MAG_CalValid = true;
                 Saved = Flash_Save();
-                printf("CAL,MAG,DONE\r\n");
 
-                if(Saved == false)
-                {
-                    printf("CAL,MAG,SAVE,ERROR\r\n");
-                }
+                if(Saved == false) MAG_CalValid = false;
             }
 
             CAL_State = IDLE;

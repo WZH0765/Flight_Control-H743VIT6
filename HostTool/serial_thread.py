@@ -1,4 +1,5 @@
 from PyQt5.QtCore import QThread, pyqtSignal
+from queue import Queue, Empty
 import struct
 import serial
 
@@ -33,6 +34,7 @@ class SerialThread(QThread):
         self.ser = None
         self.is_running = False
         self.buf = bytearray()
+        self.tx_queue = Queue()
 
         self.last_error = ""
 
@@ -43,6 +45,8 @@ class SerialThread(QThread):
             self.connection_result.emit(True, "")
 
             while self.is_running:
+                self._flush_tx()
+
                 data = self.ser.read(max(1, self.ser.in_waiting))
                 if data:
                     self._feed(data)
@@ -96,6 +100,20 @@ class SerialThread(QThread):
                 del self.buf[:total]
             else:
                 del self.buf[0]                     # 坏帧，丢一字节重新找同步
+
+    def send(self, data: bytes):
+        """界面线程调这个，真正的写操作在读线程里做（pyserial 不是线程安全的）"""
+        self.tx_queue.put(data)
+
+    def _flush_tx(self):
+        while True:
+            try:
+                self.ser.write(self.tx_queue.get_nowait())
+            except Empty:
+                return
+            except Exception as error:
+                self.last_error = str(error)
+                return
 
     def stop(self):
         self.is_running = False
