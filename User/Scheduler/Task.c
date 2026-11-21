@@ -73,6 +73,10 @@ void PVRS_Est(void)
     {
         OFL.New = false;
 
+        if(OFL.Flow_Qual >= 50)
+        {
+            PVRS_Flow(OFL.Vf,OFL.Vr);
+        }
         if(OFL.Laser_Qual >= 30)
         {
             PVRS_Height(OFL.Alt,R_ALT);
@@ -80,11 +84,6 @@ void PVRS_Est(void)
         else
         {
             PVRS_Height(44330.0f*(1.0f - powf(HW_Sample.Pressure/ZeroPress,0.190295f)),R_BAR);
-        }
-
-        if(OFL.Flow_Qual >= 50)
-        {
-            PVRS_Flow(OFL.Vf,OFL.Vr);
         }
     }
 

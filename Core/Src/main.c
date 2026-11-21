@@ -105,12 +105,12 @@ int main(void)
   // MX_SDMMC1_SD_Init();
 
   Motor_Init();
+  Flash_Load();
   Receiver_Start();
 
   Scheduler_Init();
   Hardware_Init();
   Flight_Init();
-  // Flash_Load();
 
 #ifdef USE_SIM
   Simulator_Init();

@@ -1,6 +1,6 @@
 import pyqtgraph as pg
 from collections import deque
-from config import DATA_LEN, LINK_ATTITUDE, LINK_CAL, LINK_IMU, LINK_OFL, LINK_STATUS
+from config import DATA_LEN, LINK_ATTITUDE, LINK_CAL, LINK_IMU, LINK_OFL, LINK_PVRS, LINK_STATUS
 from PyQt5.QtWidgets import QGridLayout, QLabel
 
 DBG_PLOT_H  = 150
@@ -120,6 +120,11 @@ class DebugPageMixin:
 
         elif fid == LINK_CAL:
             self._handle_cal_frame(v)
+
+        elif fid == LINK_PVRS:
+            self.latest.update(pn=v[0] / 100.0, pe=v[1] / 100.0,
+                               vn=v[2] / 100.0, ve=v[3] / 100.0,
+                               pd=v[4] / 100.0, vd=v[5] / 100.0)
 
         elif fid == LINK_STATUS:
             self.latest.update(gyr=v[0], acc=v[1], mag=v[2], bar=v[3],

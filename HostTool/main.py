@@ -58,6 +58,8 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
         self.latest = {
             "yaw": 0.0, "roll": 0.0, "pitch": 0.0,
             "gyr": 1, "acc": 1, "mag": 1, "bar": 1, "ofl": 1, "gps": 1,
+            "pn": 0.0, "pe": 0.0, "pd": 0.0,
+            "vn": 0.0, "ve": 0.0, "vd": 0.0,
         }
 
         self.yaw_data   = deque([0] * DATA_LEN, maxlen=DATA_LEN)
@@ -81,6 +83,7 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
         # --- UI 组装 ---
         self._build_plot()
         self._build_attitude_indicator()
+        self._build_info_panel()
         self._build_simulation()
         self._build_gps_page()
         self._build_debug_page()
@@ -150,6 +153,43 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
         layout = QVBoxLayout(self.attitude_frame)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.ahi)
+
+    def _build_info_panel(self):
+        """右侧信息栏：校准状态（加粗在上）+ PVRS 读数"""
+        layout = QVBoxLayout(self.info_frame)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        Bold = QFont("Agency FB", 15)
+        Bold.setBold(True)
+
+        self.cal_text = QLabel("")
+        self.cal_text.setFont(Bold)
+        self.cal_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.cal_text.setWordWrap(True)
+
+        self.pvrs_text = QLabel("")
+        self.pvrs_text.setFont(QFont("Agency FB", 15))
+        self.pvrs_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+
+        layout.addWidget(self.cal_text)
+        layout.addWidget(self.pvrs_text)
+        layout.addStretch(1)
+
+        self._update_pvrs()
+
+    def _update_pvrs(self):
+        self.pvrs_text.setText(
+            "位置\n"
+            "  北  %+6.2f m\n"
+            "  东  %+6.2f m\n\n"
+            "速度\n"
+            "  北  %+6.2f m/s\n"
+            "  东  %+6.2f m/s\n\n"
+            "高度  %+6.2f m"
+            % (self.latest["pn"], self.latest["pe"],
+               self.latest["vn"], self.latest["ve"],
+               -self.latest["pd"]))
 
     # ============================================================ 提示信息
     def _show_hint(self, text):
@@ -379,11 +419,11 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
 
         if len(v) > 4:
             if v[3] and v[4]:
-                self._show_hint("校准参数：已加载")
+                self.cal_text.setText("校准参数：已加载")
             elif v[3] or v[4]:
-                self._show_hint("校准参数：部分加载")
+                self.cal_text.setText("校准参数：部分加载")
             else:
-                self._show_hint("校准参数：未校准")
+                self.cal_text.setText("校准参数：未校准")
 
         # 固件 5Hz 重复发，只在状态或面号变化时写日志
         changed = (v[0], state, face) != getattr(self, "_cal_key", None)
@@ -479,6 +519,9 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
         # 仿真页的读数跟着主题走
         self.sim_numbers.setStyleSheet(
             "font-size: 9pt; font-family: Consolas, monospace; color: %s;" % t["label_color"])
+
+        self.pvrs_text.setStyleSheet("color: %s;" % t["label_color"])
+        self.cal_text.setStyleSheet("color: %s;" % t["label_color"])
 
         # 曲线和姿态球
         self.plot.setBackground(t["plot_bg"])
@@ -646,6 +689,7 @@ class MainWindow(SimPageMixin, GpsMixin, DebugPageMixin, QMainWindow):
         self._update_health()
         self._update_curves()
         self._update_attitude()
+        self._update_pvrs()
         self._update_sim()
         self._update_debug()
 
