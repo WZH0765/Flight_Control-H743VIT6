@@ -18,7 +18,7 @@ static uint8_t Rx_Buf[LINK_MAX + 6];
 
 static volatile uint16_t Rx_Head = 0;           //Rx头
 static volatile uint16_t Rx_Tail = 0;           //Rx尾
-static volatile uint8_t Rx_Ring[RX_SIZE];       //Rx环形缓冲区
+static volatile uint8_t  Rx_Ring[RX_SIZE];      //Rx环形缓冲区
 
 /***************
 *  发一帧
@@ -225,12 +225,8 @@ void Link_Run(void)
         return;
     }
 
-/*校准状态 5Hz；结束后再补发 0.4 秒，让上位机收到"已结束"这一帧*/
-    static uint32_t Cal_Last = 0;
-
-    if(CAL_State != IDLE) Cal_Last = Now;
-
-    if(Now - Cal_Last < 400 && Now - Tick[5] >= 200)
+/*校准状态 5Hz*/
+    if(Now - Tick[5] >= 200)
     {
         Tick[5] = Now;
 
@@ -241,5 +237,6 @@ void Link_Run(void)
         Buf[4] = MAG_CalValid;
 
         Link_Tx(LINK_CAL,Buf,5);
+        return;
     }
 }
