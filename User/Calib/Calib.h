@@ -23,8 +23,8 @@ typedef enum
 typedef enum
 {
     IDLE = 0,
-    CHECK   ,
     WAIT    ,
+    CHECK   ,
     REQUEST ,
     COLLECT
 
